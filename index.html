@@ -158,12 +158,13 @@ function runFinale() {
     f.vault = options[Math.floor(Math.random() * options.length)] || 3;
     log(`${f.name} chooses to try and unlock the ${f.vault}-key vault.`);
   }
-  jury.forEach(j => {
-    let keys = j.key3 ? 4 : j.key2 ? 2 : 1;
-    let recipient = pickAllyOrRandom(j, finalists);
-    recipient.bonusKeys += keys;
-    recipient.totalFinalKeys += keys;
-  });
+const totalJuryKeys = 16;
+for (let i = 0; i < totalJuryKeys; i++) {
+  const juror = jury[i % jury.length];
+  const recipient = pickAllyOrRandom(juror, finalists);
+  recipient.bonusKeys++;
+  recipient.totalFinalKeys++;
+}
   let unlocked = finalists.filter(f => f.totalFinalKeys >= f.vault);
   if (unlocked.length) {
     unlocked.sort((a,b)=>b.vault - a.vault);
