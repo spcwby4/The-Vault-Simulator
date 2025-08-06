@@ -250,12 +250,12 @@
     function runPhase2Round() {
       const noKeyPlayers = players.filter(p => !p.keyPhase2 && !p.eliminated);
       const allVoters = players.filter(p => !p.eliminated);
-      if (round > 4 || noKeyPlayers.length <= 4) {
-        phase = 3;
-        round = 1;
-        return runRound();
-      }
-
+     if (round >= 4 || players.filter(p => !p.eliminated && !p.keyPhase2).length <= 4) {
+  // Mark the 4 remaining players as eligible for Phase 3
+  phase = 3;
+  round = 1;
+  return runRound();
+}
       const log = document.getElementById("log");
       log.textContent += `Phase 2 – Round ${round}\n`;
 
