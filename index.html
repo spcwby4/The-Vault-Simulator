@@ -45,10 +45,6 @@
     th {
       background-color: #eee;
     }
-    .progress-check {
-      color: green;
-      font-size: 20px;
-    }
     .collapsible {
       background-color: #eee;
       color: #000;
@@ -102,295 +98,303 @@
   </div>
 
   <script>
-let players = [], activePlayers = [], eliminatedPlayers = [], jurors = [], finalists = [];
-let alliances = [], round = 1, phase = 1, lockpickHolder = null, lockpickHidden = true;
-let voteLogs = [], juryMatrix = {}, totalJuryKeys = 16;
+    let players = [], activePlayers = [], eliminatedPlayers = [], jurors = [], finalists = [];
+    let alliances = [], round = 1, phase = 1, lockpickHolder = null, lockpickHidden = true;
+    let voteLogs = [], juryMatrix = {}, totalJuryKeys = 16;
+    const vaults = [3, 5, 7, 9, 11, 13, 15, 17, 19, 22];
 
-function startGame() {
-  const input = document.getElementById("playerInput").value.trim().split("\n").map(name => name.trim()).filter(Boolean);
-  if (input.length !== 12) return alert("Please enter exactly 12 players.");
-  players = input.map(name => ({ name, keys: 0, phase: 0, eliminated: false }));
-  activePlayers = [...players];
-  setupAlliances();
-  updateAlliances();
-  log(`Phase 1: Key Quest begins!`);
-  updateProgressChart();
-  nextRound();
-}
-
-function nextRound() {
-  clearLog();
-  if (phase === 1) simulatePhase1();
-  else if (phase === 2) simulatePhase2();
-  else if (phase === 3) simulatePhase3();
-  else simulateFinale();
-}
-
-function simulatePhase1() {
-  const noKeyPlayers = activePlayers.filter(p => p.keys === 0);
-  const drawn = round === 4 ? noKeyPlayers : sample(noKeyPlayers, 4);
-  log(`Phase 1 – Round ${round}`);
-  drawn.forEach(p => log(`${p.name} is drawn.`));
-
-  if (lockpickHidden && Math.random() < 0.33) {
-    lockpickHolder = sample(drawn, 1)[0];
-    lockpickHidden = false;
-    log(`${lockpickHolder.name} secretly found the Lockpick.`);
-  }
-
-  let votes = [], voteTarget = null;
-  players.forEach(voter => {
-    let options = drawn.filter(p => p.name !== voter.name);
-    votes.push({ voter: voter.name, vote: sample(options, 1)[0].name });
-  });
-
-  let counts = countVotes(votes);
-  let top = topVote(counts);
-  voteTarget = drawn.find(p => p.name === top);
-
-  if (lockpickHolder && drawn.includes(lockpickHolder)) {
-    voteTarget = lockpickHolder;
-    log(`${lockpickHolder.name} uses the Lockpick to override the vote.`);
-    lockpickHolder = null;
-    lockpickHidden = true;
-  }
-
-  voteTarget.keys++; voteTarget.phase = 1;
-  log(`${voteTarget.name} wins the vote key!`);
-
-  const challengeWinner = sample(drawn.filter(p => p !== voteTarget), 1)[0];
-  challengeWinner.keys++; challengeWinner.phase = 1;
-  log(`${challengeWinner.name} wins the challenge key!`);
-
-  voteLogs.push({ phase, round, votes });
-  updateVotingMatrix();
-
-  round++;
-  updateProgressChart();
-
-  if (round > 4) {
-    const eliminated = activePlayers.filter(p => p.keys === 0);
-    eliminated.forEach(p => { p.eliminated = true; jurors.push(p); });
-    activePlayers = activePlayers.filter(p => p.keys > 0);
-    log(`Eliminated in Phase 1: ${eliminated.map(p => p.name).join(", ")}`);
-    phase = 2; round = 1;
-    log(`Phase 2: Key Duels begins!`);
-  } else {
-    log("Click again for next round.");
-  }
-}
-
-function simulatePhase2() {
-  const noKey = activePlayers.filter(p => p.phase < 2);
-  log(`Phase 2 – Round ${round}`);
-
-  if (lockpickHidden && Math.random() < 0.33) {
-    lockpickHolder = sample(noKey, 1)[0];
-    lockpickHidden = false;
-    log(`${lockpickHolder.name} secretly found the Lockpick.`);
-  }
-
-  let votes = [], voteTarget = null;
-  activePlayers.forEach(voter => {
-    let options = noKey.filter(p => p.name !== voter.name);
-    votes.push({ voter: voter.name, vote: sample(options, 1)[0].name });
-  });
-
-  let counts = countVotes(votes);
-  let top = topVote(counts);
-  voteTarget = noKey.find(p => p.name === top);
-
-  if (lockpickHolder && noKey.includes(lockpickHolder)) {
-    voteTarget = lockpickHolder;
-    log(`${lockpickHolder.name} uses the Lockpick to override the vote.`);
-    lockpickHolder = null;
-    lockpickHidden = true;
-  }
-
-  const opponent = sample(noKey.filter(p => p !== voteTarget), 1)[0];
-  log(`${voteTarget.name} chooses to duel ${opponent.name}.`);
-
-  const winner = Math.random() < 0.5 ? voteTarget : opponent;
-  winner.keys++; winner.phase = 2;
-  log(`${winner.name} wins the duel and earns a key!`);
-
-  voteLogs.push({ phase, round, votes });
-  updateVotingMatrix();
-
-  round++;
-  updateProgressChart();
-
-  if (round > 4) {
-    const eliminated = activePlayers.filter(p => p.phase < 2);
-    eliminated.forEach(p => { p.eliminated = true; jurors.push(p); });
-    activePlayers = activePlayers.filter(p => p.phase >= 2);
-    log(`Eliminated in Phase 2: ${eliminated.map(p => p.name).join(", ")}`);
-    phase = 3; round = 1;
-    log("Phase 3: Final Cut begins!");
-  } else {
-    log("Click again for next round.");
-  }
-}
-
-function simulatePhase3() {
-  log("Phase 3 – Final 4");
-  const voteOptions = [...activePlayers];
-  let votes = [];
-
-  voteOptions.forEach(voter => {
-    let options = voteOptions.filter(p => p.name !== voter.name);
-    votes.push({ voter: voter.name, vote: sample(options, 1)[0].name });
-  });
-
-  let counts = countVotes(votes);
-  let top = topVote(counts);
-  const voteWinner = voteOptions.find(p => p.name === top);
-
-  const pick = sample(activePlayers.filter(p => p !== voteWinner), 1)[0];
-  const remaining = activePlayers.filter(p => ![voteWinner.name, pick.name].includes(p.name));
-  const challengeWinner = Math.random() < 0.5 ? remaining[0] : remaining[1];
-  const eliminated = remaining.find(p => p !== challengeWinner);
-
-  finalists = [voteWinner, pick, challengeWinner];
-  finalists.forEach(p => { p.phase = 3; p.keys++; });
-
-  eliminated.eliminated = true;
-  jurors.push(eliminated);
-  log(`${voteWinner.name} wins the vote and brings ${pick.name} to the finale.`);
-  log(`${challengeWinner.name} wins the final duel. ${eliminated.name} is eliminated in 4th.`);
-
-  voteLogs.push({ phase: 3, round, votes });
-  updateVotingMatrix();
-  updateProgressChart();
-
-  phase = 4;
-  log("Click again for the Vault Finale.");
-}
-
-function simulateFinale() {
-  log("Vault Finale begins.");
-  const matrix = {};
-  finalists.forEach(f => f.keys += 0); // ensure they still have 3 base keys
-
-  jurors.forEach(j => {
-    const count = j.phase === 1 ? 1 : j.phase === 2 ? 2 : 4;
-    const choices = sample(finalists, count);
-    matrix[j.name] = {};
-    choices.forEach(f => {
-      matrix[j.name][f.name] = (matrix[j.name][f.name] || 0) + 1;
-      f.keys++;
-    });
-  });
-
-  juryMatrix = matrix;
-  updateJuryMatrix();
-
-  let bestVault = 0, winner = null;
-  finalists.forEach(f => {
-    const vault = vaults.filter(v => v <= f.keys).reverse()[0] || 3;
-    if (vault > bestVault) {
-      bestVault = vault;
-      winner = f;
+    function startGame() {
+      const input = document.getElementById("playerInput").value.trim().split("\n").map(name => name.trim()).filter(Boolean);
+      if (input.length !== 12) return alert("Please enter exactly 12 players.");
+      players = input.map(name => ({ name, keys: 0, phase: 0, eliminated: false }));
+      activePlayers = [...players];
+      setupAlliances();
+      updateAlliances();
+      log(`Phase 1: Key Quest begins!`);
+      updateProgressChart();
+      createNextRoundButton();
     }
-  });
 
-  log(`${winner.name} opens the ${bestVault}-key vault and wins The Vault!`);
-}
+    function createNextRoundButton() {
+      let existing = document.getElementById("nextRoundBtn");
+      if (!existing) {
+        const btn = document.createElement("button");
+        btn.id = "nextRoundBtn";
+        btn.innerText = "Next Round";
+        btn.onclick = nextRound;
+        document.getElementById("roundEventsBox").appendChild(btn);
+      }
+    }
 
-function setupAlliances() {
-  alliances = [
-    { name: "Alliance A", members: players.slice(0, 4) },
-    { name: "Alliance B", members: players.slice(4, 8) },
-    { name: "Alliance C", members: players.slice(8, 12) },
-  ];
-}
+    function nextRound() {
+      clearLog();
+      if (phase === 1) simulatePhase1();
+      else if (phase === 2) simulatePhase2();
+      else if (phase === 3) simulatePhase3();
+      else simulateFinale();
+    }
 
-function updateAlliances() {
-  const div = document.getElementById("alliancesList");
-  div.innerHTML = alliances.map(a => `<strong>${a.name}:</strong> ${a.members.map(m => m.name).join(", ")}`).join("<br>");
-}
+    function simulatePhase1() {
+      const noKeyPlayers = activePlayers.filter(p => p.keys === 0);
+      const drawn = round === 4 ? noKeyPlayers : sample(noKeyPlayers, 4);
+      log(`Phase 1 – Round ${round}`);
+      drawn.forEach(p => log(`${p.name} is drawn.`));
 
-function updateProgressChart() {
-  const chart = document.getElementById("progressChart");
-  chart.innerHTML = "";
-  const table = document.createElement("table");
-  table.innerHTML = "<tr><th>Player</th><th>Phase 1</th><th>Phase 2</th><th>Phase 3</th></tr>";
-  players.forEach(p => {
-    table.innerHTML += `<tr><td>${p.name}</td><td>${p.phase >= 1 ? "✅" : ""}</td><td>${p.phase >= 2 ? "✅" : ""}</td><td>${p.phase >= 3 ? "✅" : ""}</td></tr>`;
-  });
-  chart.appendChild(table);
-}
+      if (lockpickHidden && Math.random() < 0.33) {
+        lockpickHolder = sample(drawn, 1)[0];
+        lockpickHidden = false;
+        log(`${lockpickHolder.name} secretly found the Lockpick.`);
+      }
 
-function updateVotingMatrix() {
-  const box = document.getElementById("votingMatrix");
-  box.innerHTML = "";
-  voteLogs.forEach(log => {
-    const btn = document.createElement("button");
-    btn.className = "collapsible";
-    btn.textContent = `Phase ${log.phase}, Round ${log.round} Voting`;
-    const div = document.createElement("div");
-    div.className = "content";
-    const table = document.createElement("table");
-    table.innerHTML = "<tr><th>Voter</th><th>Voted For</th></tr>";
-    log.votes.forEach(v => {
-      table.innerHTML += `<tr><td>${v.voter}</td><td>${v.vote}</td></tr>`;
-    });
-    div.appendChild(table);
-    btn.onclick = function () {
-      this.classList.toggle("active");
-      div.style.display = div.style.display === "block" ? "none" : "block";
-    };
-    box.appendChild(btn);
-    box.appendChild(div);
-  });
-}
+      let votes = [], voteTarget = null;
+      players.forEach(voter => {
+        let options = drawn.filter(p => p.name !== voter.name);
+        votes.push({ voter: voter.name, vote: sample(options, 1)[0].name });
+      });
 
-function updateJuryMatrix() {
-  const box = document.getElementById("juryMatrix");
-  box.innerHTML = "";
-  const table = document.createElement("table");
-  table.innerHTML = `<tr><th>Juror</th>${finalists.map(f => `<th>${f.name}</th>`).join("")}<th>Total</th></tr>`;
-  for (const juror in juryMatrix) {
-    let row = `<tr><td>${juror}</td>`;
-    let total = 0;
-    finalists.forEach(f => {
-      const val = juryMatrix[juror][f.name] || 0;
-      total += val;
-      row += `<td>${val}</td>`;
-    });
-    row += `<td>${total}</td></tr>`;
-    table.innerHTML += row;
-  }
-  box.appendChild(table);
-}
+      let counts = countVotes(votes);
+      let top = topVote(counts);
+      voteTarget = drawn.find(p => p.name === top);
 
-function sample(arr, n) {
-  const out = [], copy = [...arr];
-  while (out.length < n && copy.length) {
-    const i = Math.floor(Math.random() * copy.length);
-    out.push(copy.splice(i, 1)[0]);
-  }
-  return out.length === 1 ? out[0] : out;
-}
+      if (lockpickHolder && drawn.includes(lockpickHolder)) {
+        voteTarget = lockpickHolder;
+        log(`${lockpickHolder.name} uses the Lockpick to override the vote.`);
+        lockpickHolder = null;
+        lockpickHidden = true;
+      }
 
-function countVotes(votes) {
-  const counts = {};
-  votes.forEach(v => counts[v.vote] = (counts[v.vote] || 0) + 1);
-  return counts;
-}
+      voteTarget.keys++; voteTarget.phase = 1;
+      log(`${voteTarget.name} wins the vote key!`);
 
-function topVote(counts) {
-  const max = Math.max(...Object.values(counts));
-  const tied = Object.keys(counts).filter(k => counts[k] === max);
-  return tied[Math.floor(Math.random() * tied.length)];
-}
+      const challengeWinner = sample(drawn.filter(p => p !== voteTarget), 1)[0];
+      challengeWinner.keys++; challengeWinner.phase = 1;
+      log(`${challengeWinner.name} wins the challenge key!`);
 
-function log(msg) {
-  document.getElementById("roundEvents").innerText += msg + "\n";
-}
-function clearLog() {
-  document.getElementById("roundEvents").innerText = "";
-}
+      voteLogs.push({ phase, round, votes });
+      updateVotingMatrix();
+
+      round++;
+      updateProgressChart();
+
+      if (round > 4) {
+        const eliminated = activePlayers.filter(p => p.keys === 0);
+        eliminated.forEach(p => { p.eliminated = true; jurors.push(p); });
+        activePlayers = activePlayers.filter(p => p.keys > 0);
+        log(`Eliminated in Phase 1: ${eliminated.map(p => p.name).join(", ")}`);
+        phase = 2; round = 1;
+        log(`Phase 2: Key Duels begins!`);
+      }
+    }
+
+    function simulatePhase2() {
+      const noKey = activePlayers.filter(p => p.phase < 2);
+      log(`Phase 2 – Round ${round}`);
+
+      if (lockpickHidden && Math.random() < 0.33) {
+        lockpickHolder = sample(noKey, 1)[0];
+        lockpickHidden = false;
+        log(`${lockpickHolder.name} secretly found the Lockpick.`);
+      }
+
+      let votes = [], voteTarget = null;
+      activePlayers.forEach(voter => {
+        let options = noKey.filter(p => p.name !== voter.name);
+        votes.push({ voter: voter.name, vote: sample(options, 1)[0].name });
+      });
+
+      let counts = countVotes(votes);
+      let top = topVote(counts);
+      voteTarget = noKey.find(p => p.name === top);
+
+      if (lockpickHolder && noKey.includes(lockpickHolder)) {
+        voteTarget = lockpickHolder;
+        log(`${lockpickHolder.name} uses the Lockpick to override the vote.`);
+        lockpickHolder = null;
+        lockpickHidden = true;
+      }
+
+      const opponent = sample(noKey.filter(p => p !== voteTarget), 1)[0];
+      log(`${voteTarget.name} chooses to duel ${opponent.name}.`);
+
+      const winner = Math.random() < 0.5 ? voteTarget : opponent;
+      winner.keys++; winner.phase = 2;
+      log(`${winner.name} wins the duel and earns a key!`);
+
+      voteLogs.push({ phase, round, votes });
+      updateVotingMatrix();
+
+      round++;
+      updateProgressChart();
+
+      if (round > 4) {
+        const eliminated = activePlayers.filter(p => p.phase < 2);
+        eliminated.forEach(p => { p.eliminated = true; jurors.push(p); });
+        activePlayers = activePlayers.filter(p => p.phase >= 2);
+        log(`Eliminated in Phase 2: ${eliminated.map(p => p.name).join(", ")}`);
+        phase = 3; round = 1;
+        log("Phase 3: Final Cut begins!");
+      }
+    }
+
+    function simulatePhase3() {
+      log("Phase 3 – Final 4");
+      const voteOptions = [...activePlayers];
+      let votes = [];
+
+      voteOptions.forEach(voter => {
+        let options = voteOptions.filter(p => p.name !== voter.name);
+        votes.push({ voter: voter.name, vote: sample(options, 1)[0].name });
+      });
+
+      let counts = countVotes(votes);
+      let top = topVote(counts);
+      const voteWinner = voteOptions.find(p => p.name === top);
+
+      const pick = sample(activePlayers.filter(p => p !== voteWinner), 1)[0];
+      const remaining = activePlayers.filter(p => ![voteWinner.name, pick.name].includes(p.name));
+      const challengeWinner = Math.random() < 0.5 ? remaining[0] : remaining[1];
+      const eliminated = remaining.find(p => p !== challengeWinner);
+
+      finalists = [voteWinner, pick, challengeWinner];
+      finalists.forEach(p => { p.phase = 3; p.keys++; });
+
+      eliminated.eliminated = true;
+      jurors.push(eliminated);
+      log(`${voteWinner.name} wins the vote and brings ${pick.name} to the finale.`);
+      log(`${challengeWinner.name} wins the final duel. ${eliminated.name} is eliminated in 4th.`);
+
+      voteLogs.push({ phase: 3, round, votes });
+      updateVotingMatrix();
+      updateProgressChart();
+
+      phase = 4;
+      log("Click again for the Vault Finale.");
+    }
+
+    function simulateFinale() {
+      log("Vault Finale begins.");
+      const matrix = {};
+      finalists.forEach(f => f.keys += 0);
+
+      jurors.forEach(j => {
+        const count = j.phase === 1 ? 1 : j.phase === 2 ? 2 : 4;
+        const choices = sample(finalists, count);
+        matrix[j.name] = {};
+        choices.forEach(f => {
+          matrix[j.name][f.name] = (matrix[j.name][f.name] || 0) + 1;
+          f.keys++;
+        });
+      });
+
+      juryMatrix = matrix;
+      updateJuryMatrix();
+
+      let bestVault = 0, winner = null;
+      finalists.forEach(f => {
+        const vault = vaults.filter(v => v <= f.keys).reverse()[0] || 3;
+        if (vault > bestVault) {
+          bestVault = vault;
+          winner = f;
+        }
+      });
+
+      log(`${winner.name} opens the ${bestVault}-key vault and wins The Vault!`);
+    }
+
+    function setupAlliances() {
+      alliances = [
+        { name: "Alliance A", members: players.slice(0, 4) },
+        { name: "Alliance B", members: players.slice(4, 8) },
+        { name: "Alliance C", members: players.slice(8, 12) },
+      ];
+    }
+
+    function updateAlliances() {
+      const div = document.getElementById("alliancesList");
+      div.innerHTML = alliances.map(a => `<strong>${a.name}:</strong> ${a.members.map(m => m.name).join(", ")}`).join("<br>");
+    }
+
+    function updateProgressChart() {
+      const chart = document.getElementById("progressChart");
+      chart.innerHTML = "";
+      const table = document.createElement("table");
+      table.innerHTML = "<tr><th>Player</th><th>Phase 1</th><th>Phase 2</th><th>Phase 3</th></tr>";
+      players.forEach(p => {
+        table.innerHTML += `<tr><td>${p.name}</td><td>${p.phase >= 1 ? "✅" : ""}</td><td>${p.phase >= 2 ? "✅" : ""}</td><td>${p.phase >= 3 ? "✅" : ""}</td></tr>`;
+      });
+      chart.appendChild(table);
+    }
+
+    function updateVotingMatrix() {
+      const box = document.getElementById("votingMatrix");
+      box.innerHTML = "";
+      voteLogs.forEach(log => {
+        const btn = document.createElement("button");
+        btn.className = "collapsible";
+        btn.textContent = `Phase ${log.phase}, Round ${log.round} Voting`;
+        const div = document.createElement("div");
+        div.className = "content";
+        const table = document.createElement("table");
+        table.innerHTML = "<tr><th>Voter</th><th>Voted For</th></tr>";
+        log.votes.forEach(v => {
+          table.innerHTML += `<tr><td>${v.voter}</td><td>${v.vote}</td></tr>`;
+        });
+        div.appendChild(table);
+        btn.onclick = function () {
+          this.classList.toggle("active");
+          div.style.display = div.style.display === "block" ? "none" : "block";
+        };
+        box.appendChild(btn);
+        box.appendChild(div);
+      });
+    }
+
+    function updateJuryMatrix() {
+      const box = document.getElementById("juryMatrix");
+      box.innerHTML = "";
+      const table = document.createElement("table");
+      table.innerHTML = `<tr><th>Juror</th>${finalists.map(f => `<th>${f.name}</th>`).join("")}<th>Total</th></tr>`;
+      for (const juror in juryMatrix) {
+        let row = `<tr><td>${juror}</td>`;
+        let total = 0;
+        finalists.forEach(f => {
+          const val = juryMatrix[juror][f.name] || 0;
+          total += val;
+          row += `<td>${val}</td>`;
+        });
+        row += `<td>${total}</td></tr>`;
+        table.innerHTML += row;
+      }
+      box.appendChild(table);
+    }
+
+    function sample(arr, n) {
+      const out = [], copy = [...arr];
+      while (out.length < n && copy.length) {
+        const i = Math.floor(Math.random() * copy.length);
+        out.push(copy.splice(i, 1)[0]);
+      }
+      return out.length === 1 ? out[0] : out;
+    }
+
+    function countVotes(votes) {
+      const counts = {};
+      votes.forEach(v => counts[v.vote] = (counts[v.vote] || 0) + 1);
+      return counts;
+    }
+
+    function topVote(counts) {
+      const max = Math.max(...Object.values(counts));
+      const tied = Object.keys(counts).filter(k => counts[k] === max);
+      return tied[Math.floor(Math.random() * tied.length)];
+    }
+
+    function log(msg) {
+      document.getElementById("roundEvents").innerText += msg + "\n";
+    }
+    function clearLog() {
+      document.getElementById("roundEvents").innerText = "";
+    }
   </script>
 </body>
 </html>
