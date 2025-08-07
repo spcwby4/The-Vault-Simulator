@@ -1,193 +1,198 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>The Vault Simulator</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f2f2f2; padding: 20px; }
-    .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    h2 { margin-top: 0; }
-    textarea { width: 100%; height: 200px; }
-    button { margin-top: 10px; padding: 10px 20px; cursor: pointer; }
-    .collapsible { background-color: #eee; color: #444; cursor: pointer; padding: 10px; border: none; text-align: left; outline: none; font-size: 15px; width: 100%; margin-top: 10px; }
-    .active, .collapsible:hover { background-color: #ccc; }
-    .content { padding: 0 18px; display: none; overflow: hidden; background-color: #f9f9f9; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      padding: 20px;
+    }
+    .box {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+    .collapsible {
+      background-color: #eee;
+      color: #333;
+      cursor: pointer;
+      padding: 10px;
+      width: 100%;
+      border: none;
+      text-align: left;
+      outline: none;
+      font-size: 15px;
+      margin-top: 10px;
+    }
+    .active, .collapsible:hover {
+      background-color: #ccc;
+    }
+    .content {
+      display: none;
+      overflow: hidden;
+      background-color: #f9f9f9;
+      padding: 10px;
+    }
+    #nextRoundBtn {
+      display: block;
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #3a7bd5;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #nextRoundBtn:hover {
+      background-color: #2a5db0;
+    }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h2>The Vault Simulator</h2>
-  <textarea id="playerInput" placeholder="Enter 12 players, one per line..."></textarea>
-  <button onclick="startGame()">Start Game</button>
-</div>
+  <div class="box">
+    <h2>The Vault Simulator</h2>
+    <p>Enter 12 player names, one per line:</p>
+    <textarea id="playerInput" placeholder="Player 1&#10;Player 2&#10;...&#10;Player 12"></textarea>
+    <button onclick="startGame()">Start Game</button>
+  </div>
 
-<div class="container" id="roundEventsBox">
-  <h3>Round Events</h3>
-  <pre id="roundEvents"></pre>
-</div>
+  <div class="box" id="roundEventsBox">
+    <h3>Round Events</h3>
+    <pre id="roundEvents"></pre>
+  </div>
 
-<div class="container" id="alliancesBox">
-  <h3>Alliances</h3>
-  <div id="alliancesList"></div>
-</div>
+  <div class="box" id="alliancesBox">
+    <h3>Alliances</h3>
+    <div id="alliancesList"></div>
+  </div>
 
-<div class="container" id="progressBox">
-  <h3>Progress Chart</h3>
-  <div id="progressChart"></div>
-</div>
+  <div class="box">
+    <h3>Progress Chart</h3>
+    <div id="progressChart"></div>
+  </div>
 
-<div class="container" id="votingMatrixBox">
-  <h3>Voting Matrix</h3>
-  <div id="votingMatrix"></div>
-</div>
+  <div class="box">
+    <h3>Voting Matrix</h3>
+    <div id="votingMatrix"></div>
+  </div>
 
-<div class="container" id="juryMatrixBox">
-  <h3>Jury Key Distribution</h3>
-  <div id="juryMatrix"></div>
-</div>
+  <div class="box">
+    <h3>Jury Key Matrix</h3>
+    <div id="juryMatrix"></div>
+  </div>
 
-<script>
-let players = [];
-let round = 0;
-let phase = 1;
-let logBox = null;
-let alliances = {};
-let voteLogs = [];
-let juryVotes = [];
-let eliminatedPlayers = [];
-let keyHolders = [];
-let finalists = [];
-let lockpickHolder = null;
-let lockpickHidden = true;
+  <script>
+let players = [], alliances = {}, round = 1, phase = 1, lockpickHolder = null, lockpickHidden = true;
+let eliminatedPlayers = [], finalists = [], voteLogs = [], juryVotes = [], keyHolders = [];
 
 function startGame() {
-  const input = document.getElementById('playerInput').value.trim().split('\n').map(x => x.trim()).filter(Boolean);
-  if (input.length !== 12) {
-    alert('Please enter exactly 12 player names.');
-    return;
-  }
-  players = input.map(name => ({
-    name,
-    keys: 0,
-    phase: 0,
-    eliminated: false,
-    alliances: []
-  }));
+  const input = document.getElementById('playerInput').value.trim().split('\n').map(p => p.trim()).filter(Boolean);
+  if (input.length !== 12) return alert("Enter exactly 12 players.");
+  players = input.map(name => ({ name, keys: 0, phase: 0, eliminated: false }));
   round = 1;
   phase = 1;
+  eliminatedPlayers = [];
+  finalists = [];
   voteLogs = [];
   juryVotes = [];
-  eliminatedPlayers = [];
-  keyHolders = [];
-  finalists = [];
   lockpickHolder = null;
   lockpickHidden = true;
-
-  document.getElementById('roundEvents').innerText = '';
-  logBox = document.getElementById('roundEvents');
-  log(`Phase 1: Key Quest begins!`);
+  keyHolders = [];
+  log(`Key Quest begins!`);
   createAlliances();
   showAlliances();
   updateProgressChart();
-  nextRound();
-  createNextRoundButton();
+  document.getElementById('roundEvents').innerHTML = '';
+  simulatePhase1();
 }
 
-function createNextRoundButton() {
-  let existing = document.getElementById("nextRoundBtn");
-  if (!existing) {
-    const btn = document.createElement("button");
-    btn.id = "nextRoundBtn";
-    btn.innerText = "Next Round";
-    btn.onclick = nextRound;
-    document.getElementById("roundEventsBox").appendChild(btn);
-  }
-}
-
-function log(text) {
-  logBox.innerText = text;
-}
-
-function nextRound() {
-  if (phase === 1) simulatePhase1();
-  else if (phase === 2) simulatePhase2();
-  else if (phase === 3) simulatePhase3();
-  else if (phase === 4) simulateFinale();
-}
 function simulatePhase1() {
-  let eligible = players.filter(p => !p.eliminated && p.phase === 0);
-  if (round > 4 || eligible.length <= 4) {
-    // Eliminate those without keys
-    eligible.forEach(p => {
+  if (round > 4) {
+    players.filter(p => p.phase === 0).forEach(p => {
       p.eliminated = true;
       eliminatedPlayers.push({ ...p, phaseEliminated: 1 });
     });
     phase = 2;
     round = 1;
-    log(`Phase 2: Key Duels begin!`);
+    log(`Phase 2: Key Duel begins!`);
     updateProgressChart();
+    simulatePhase2();
     return;
   }
 
-  // Draw 4 random non-keyholders
-  let drawPool = players.filter(p => p.phase === 0);
-  if (drawPool.length < 4) {
-    drawPool = [...eligible];
-  }
-  let drawn = sample(drawPool, Math.min(4, drawPool.length));
-  log(`Round ${round}: Drawn players: ${drawn.map(p => p.name).join(', ')}`);
+  let eligible = players.filter(p => p.phase === 0);
+  let drawn = sample(eligible, 4);
+  log(`Round ${round}: Drawn players are ${drawn.map(p => p.name).join(', ')}`);
 
-  // Lockpick check
+  let lockpickFound = false;
   if (lockpickHidden && Math.random() < 0.33) {
-    lockpickHolder = sample(drawn, 1)[0];
+    let finder = sample(drawn, 1)[0];
+    lockpickHolder = finder;
     lockpickHidden = false;
-    log(`${lockpickHolder.name} discovered the Lockpick!`);
+    lockpickFound = true;
+    log(`${finder.name} finds the Lockpick!`);
   }
 
-  // Voting
-  const votes = [];
-  players.forEach(voter => {
-    let options = drawn.filter(p => p.name !== voter.name);
-    let votee = sample(options, 1)[0];
-    votes.push({ voter: voter.name, vote: votee.name });
+  const allVote = players.map(voter => {
+    let votee = sample(drawn.filter(p => p.name !== voter.name), 1)[0];
+    return { voter: voter.name, vote: votee.name };
   });
 
-  const counts = countVotes(votes);
-  const voteWinnerName = topVote(counts);
+  const counts = countVotes(allVote);
+  let voteWinnerName = topVote(counts);
   let voteWinner = drawn.find(p => p.name === voteWinnerName);
 
   if (lockpickHolder && drawn.includes(lockpickHolder)) {
-    log(`${lockpickHolder.name} uses the Lockpick to override the vote.`);
     voteWinner = lockpickHolder;
-    lockpickHolder = null;
+    lockpickHolder.phase = 1;
+    lockpickHolder.keys++;
+    keyHolders.push(lockpickHolder.name);
     lockpickHidden = true;
+    log(`${lockpickHolder.name} uses the Lockpick to override the vote and claim the vote key.`);
+  } else {
+    voteWinner.phase = 1;
+    voteWinner.keys++;
+    keyHolders.push(voteWinner.name);
+    log(`${voteWinner.name} wins the vote and earns a key.`);
   }
 
-  voteWinner.keys++;
-  voteWinner.phase = 1;
-  keyHolders.push(voteWinner.name);
-  log(`${voteWinner.name} wins the vote key!`);
-
-  // Challenge for second key
-  const challengePool = drawn.filter(p => p.name !== voteWinner.name);
-  const challengeWinner = sample(challengePool, 1)[0];
-  challengeWinner.keys++;
+  let challengers = drawn.filter(p => p.name !== voteWinner.name);
+  let challengeWinner = sample(challengers, 1)[0];
   challengeWinner.phase = 1;
+  challengeWinner.keys++;
   keyHolders.push(challengeWinner.name);
-  log(`${challengeWinner.name} wins the challenge key!`);
+  log(`${challengeWinner.name} wins the challenge and earns a key.`);
 
-  voteLogs.push({ phase, round, votes });
+  voteLogs.push({ phase, round, votes: allVote });
   updateVotingMatrix();
   updateProgressChart();
   round++;
+  setTimeout(simulatePhase1, 100);
 }
+
 function simulatePhase2() {
-  let noKeyPlayers = players.filter(p => !p.eliminated && p.phase === 0);
-  if (round > 4 || noKeyPlayers.length <= 0) {
-    noKeyPlayers.forEach(p => {
+  if (round > 4) {
+    players.filter(p => !p.eliminated && p.phase === 0).forEach(p => {
       p.eliminated = true;
       eliminatedPlayers.push({ ...p, phaseEliminated: 2 });
     });
@@ -195,62 +200,51 @@ function simulatePhase2() {
     round = 1;
     log(`Phase 3: Final Cut begins!`);
     updateProgressChart();
+    simulatePhase3();
     return;
   }
 
-  // Voting (only for no-key players)
-  let votes = [];
-  let eligibleVoters = players.filter(p => !p.eliminated);
-  eligibleVoters.forEach(voter => {
-    let options = noKeyPlayers.filter(p => p.name !== voter.name);
-    if (options.length > 0) {
-      let votee = sample(options, 1)[0];
-      votes.push({ voter: voter.name, vote: votee.name });
-    }
+  let noKey = players.filter(p => !p.eliminated && p.phase === 0);
+  let voters = players.filter(p => !p.eliminated);
+
+  let votes = voters.map(voter => {
+    let options = noKey.filter(p => p.name !== voter.name);
+    let votee = sample(options, 1)[0];
+    return { voter: voter.name, vote: votee.name };
   });
 
   const counts = countVotes(votes);
   let voteWinnerName = topVote(counts);
-  let voteWinner = noKeyPlayers.find(p => p.name === voteWinnerName);
+  let voteWinner = noKey.find(p => p.name === voteWinnerName);
 
-  if (lockpickHolder && !voteWinner) {
+  if (lockpickHolder && noKey.includes(lockpickHolder)) {
     voteWinner = lockpickHolder;
     lockpickHolder = null;
     lockpickHidden = true;
     log(`${voteWinner.name} uses the Lockpick to override the vote.`);
   }
 
-  // Duel: voteWinner must choose someone else to duel
-  let duelOpponent = sample(noKeyPlayers.filter(p => p.name !== voteWinner.name), 1)[0];
-  log(`${voteWinner.name} duels ${duelOpponent.name}`);
+  let opponent = sample(noKey.filter(p => p.name !== voteWinner.name), 1)[0];
+  log(`${voteWinner.name} duels ${opponent.name}`);
 
-  // Random winner of the duel
-  let duelWinner = Math.random() < 0.5 ? voteWinner : duelOpponent;
-  duelWinner.keys++;
+  let duelWinner = Math.random() < 0.5 ? voteWinner : opponent;
   duelWinner.phase = 2;
+  duelWinner.keys++;
   keyHolders.push(duelWinner.name);
-  log(`${duelWinner.name} wins the duel and earns a key!`);
+  log(`${duelWinner.name} wins the duel and earns a key.`);
 
   voteLogs.push({ phase, round, votes });
   updateVotingMatrix();
   updateProgressChart();
   round++;
+  setTimeout(simulatePhase2, 100);
 }
+
 function simulatePhase3() {
   const remaining = players.filter(p => !p.eliminated);
-  if (remaining.length !== 4) {
-    phase = 4;
-    round = 1;
-    simulateFinale();
-    return;
-  }
-
-  // Voting for auto-finalist
-  const votes = [];
-  remaining.forEach(voter => {
+  const votes = remaining.map(voter => {
     let options = remaining.filter(p => p.name !== voter.name);
-    let votee = sample(options, 1)[0];
-    votes.push({ voter: voter.name, vote: votee.name });
+    return { voter: voter.name, vote: sample(options, 1)[0].name };
   });
 
   const counts = countVotes(votes);
@@ -260,175 +254,32 @@ function simulatePhase3() {
   voteWinner.phase = 3;
   voteWinner.keys++;
   finalists.push(voteWinner);
-  log(`${voteWinner.name} wins the vote and advances to the finale!`);
+  log(`${voteWinner.name} wins the vote and advances to the finale.`);
 
-  const others = remaining.filter(p => p.name !== voteWinner.name);
-  const chosen = sample(others, 1)[0];
+  const rest = remaining.filter(p => p.name !== voteWinner.name);
+  const chosen = sample(rest, 1)[0];
   chosen.phase = 3;
   chosen.keys++;
   finalists.push(chosen);
-  log(`${voteWinner.name} selects ${chosen.name} to join them.`);
+  log(`${voteWinner.name} brings ${chosen.name} to the finale.`);
 
-  const lastTwo = others.filter(p => p.name !== chosen.name);
+  const lastTwo = rest.filter(p => p.name !== chosen.name);
   const duelWinner = sample(lastTwo, 1)[0];
   duelWinner.phase = 3;
   duelWinner.keys++;
   finalists.push(duelWinner);
-
   const eliminated = lastTwo.find(p => p.name !== duelWinner.name);
   eliminated.eliminated = true;
   eliminatedPlayers.push({ ...eliminated, phaseEliminated: 3 });
-  log(`${duelWinner.name} defeats ${eliminated.name} in the final duel.`);
+  log(`${duelWinner.name} wins the challenge over ${eliminated.name}.`);
 
   voteLogs.push({ phase, round, votes });
   updateVotingMatrix();
   updateProgressChart();
   phase = 4;
-  round = 1;
   simulateFinale();
 }
-
-function simulateFinale() {
-  log(`Vault Finale begins!`);
-
-  const vaultOptions = [3, 7, 11, 14, 17, 22];
-  shuffleArray(vaultOptions);
-
-  finalists.forEach((f, i) => {
-    f.vault = vaultOptions[i];
-    log(`${f.name} chooses the vault requiring ${f.vault} keys.`);
-  });
-
-  // Jury distributes keys
-  const jury = eliminatedPlayers;
-  let keysRemaining = 16;
-
-  jury.forEach(j => {
-    const keysToGive = j.phaseEliminated === 1 ? 1 : j.phaseEliminated === 2 ? 2 : 4;
-    const allocation = [];
-    for (let i = 0; i < keysToGive; i++) {
-      allocation.push(sample(finalists, 1)[0].name);
-    }
-    juryVotes.push({ juror: j.name, keysGiven: keysToGive, votes: allocation });
-    allocation.forEach(name => {
-      const recipient = finalists.find(f => f.name === name);
-      if (recipient) recipient.keys++;
-    });
-  });
-
-  // Determine winner
-  let unlocked = finalists.filter(f => f.keys >= f.vault);
-  if (unlocked.length > 0) {
-    unlocked.sort((a, b) => b.vault - a.vault);
-    log(`${unlocked[0].name} wins by unlocking the ${unlocked[0].vault}-key vault!`);
-  } else {
-    const fourthPlace = eliminatedPlayers.find(p => p.phaseEliminated === 3);
-    log(`No vaults opened. ${fourthPlace.name} wins as 4th place!`);
-  }
-
-  updateProgressChart();
-  updateVotingMatrix();
-  updateJuryMatrix();
-}
-function sample(array, n) {
-  const copy = [...array];
-  shuffleArray(copy);
-  return copy.slice(0, n);
-}
-
-function shuffleArray(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-}
-
-function countVotes(votes) {
-  const counts = {};
-  votes.forEach(v => {
-    counts[v.vote] = (counts[v.vote] || 0) + 1;
-  });
-  return counts;
-}
-
-function topVote(counts) {
-  let max = 0;
-  let top = null;
-  for (let name in counts) {
-    if (counts[name] > max) {
-      max = counts[name];
-      top = name;
-    }
-  }
-  return top;
-}
-
-function updateVotingMatrix() {
-  let html = '';
-  voteLogs.forEach(log => {
-    html += `<button class="collapsible">Phase ${log.phase} - Round ${log.round} Votes</button><div class="content"><table><tr><th>Voter</th><th>Voted For</th></tr>`;
-    log.votes.forEach(v => {
-      html += `<tr><td>${v.voter}</td><td>${v.vote}</td></tr>`;
-    });
-    html += `</table></div>`;
-  });
-  document.getElementById('votingMatrix').innerHTML = html;
-  setupCollapsibles();
-}
-
-function updateJuryMatrix() {
-  let html = `<table><tr><th>Juror</th><th>Phase Eliminated</th><th>Votes</th></tr>`;
-  juryVotes.forEach(j => {
-    html += `<tr><td>${j.juror}</td><td>${j.keysGiven}</td><td>${j.votes.join(', ')}</td></tr>`;
-  });
-  html += `</table>`;
-  document.getElementById('juryMatrix').innerHTML = html;
-}
-
-function updateProgressChart() {
-  let html = `<table><tr><th>Player</th><th>Phase 1</th><th>Phase 2</th><th>Phase 3</th><th>Total Keys</th></tr>`;
-  players.forEach(p => {
-    let p1 = p.phase >= 1 ? '✅' : '';
-    let p2 = p.phase >= 2 ? '✅' : '';
-    let p3 = p.phase === 3 ? '✅' : '';
-    html += `<tr><td>${p.name}</td><td>${p1}</td><td>${p2}</td><td>${p3}</td><td>${p.keys}</td></tr>`;
-  });
-  html += `</table>`;
-  document.getElementById('progressChart').innerHTML = html;
-}
-
-function createAlliances() {
-  let allianceNames = ['Alliance A', 'Alliance B', 'Alliance C'];
-  alliances = {};
-  allianceNames.forEach(name => {
-    let group = sample(players, 4);
-    alliances[name] = group.map(p => p.name);
-  });
-}
-
-function showAlliances() {
-  let html = '';
-  for (let name in alliances) {
-    html += `<strong>${name}:</strong> ${alliances[name].join(', ')}<br>`;
-  }
-  document.getElementById('alliancesList').innerHTML = html;
-}
-
-function setupCollapsibles() {
-  let coll = document.getElementsByClassName("collapsible");
-  for (let i = 0; i < coll.length; i++) {
-    coll[i].addEventListener("click", function () {
-      this.classList.toggle("active");
-      let content = this.nextElementSibling;
-      if (content.style.display === "block") {
-        content.style.display = "none";
-      } else {
-        content.style.display = "block";
-      }
-    });
-  }
-}
-</script>
+  </script>
 
 </body>
 </html>
