@@ -279,6 +279,151 @@ function simulatePhase3() {
   phase = 4;
   simulateFinale();
 }
+function simulateFinale() {
+  log(`🏁 The Vault Finale begins!`);
+  let jury = eliminatedPlayers;
+  let juryMatrix = [];
+
+  // Each juror gives 1, 2, or 4 keys depending on phase
+  jury.forEach(juror => {
+    let keysToGive = juror.phaseEliminated === 1 ? 1 : juror.phaseEliminated === 2 ? 2 : 4;
+    let votes = [];
+    while (votes.length < keysToGive) {
+      let recipient = sample(finalists, 1)[0].name;
+      votes.push(recipient);
+    }
+    juryVotes.push({ juror: juror.name, keysGiven: keysToGive, votes });
+  });
+
+  // Tally final keys
+  finalists.forEach(p => {
+    let bonusKeys = juryVotes.reduce((acc, j) => acc + j.votes.filter(v => v === p.name).length, 0);
+    p.bonus = bonusKeys;
+    p.totalKeys = p.keys + bonusKeys;
+  });
+
+  // Simulate vault pick (each chooses a unique vault based on perceived strength)
+  let vaults = sample([12, 14, 16, 18, 20, 22], 3);
+  finalists.forEach((p, i) => p.vault = vaults[i]);
+
+  // Reveal results
+  finalists.forEach(p => {
+    log(`${p.name} selected a vault requiring ${p.vault} keys. Total keys: ${p.keys} base + ${p.bonus} jury = ${p.totalKeys}`);
+  });
+
+  // Determine winner
+  const openers = finalists.filter(p => p.totalKeys >= p.vault);
+  if (openers.length === 0) {
+    const backup = eliminatedPlayers.find(p => p.phaseEliminated === 3);
+    log(`No finalist opened their vault. ${backup.name} wins the game!`);
+  } else {
+    const winner = openers.reduce((a, b) => (a.vault > b.vault ? a : b));
+    log(`🏆 ${winner.name} opens the highest vault and wins the season!`);
+  }
+
+  updateJuryMatrix();
+  updateProgressChart();
+  document.getElementById('roundEvents').innerHTML += `<button onclick="location.reload()">Simulate Again</button>`;
+}
+
+function sample(array, n = 1) {
+  const copy = [...array];
+  shuffleArray(copy);
+  return n === 1 ? copy[0] : copy.slice(0, n);
+}
+
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+function countVotes(votes) {
+  const counts = {};
+  votes.forEach(v => {
+    counts[v.vote] = (counts[v.vote] || 0) + 1;
+  });
+  return counts;
+}
+
+function topVote(counts) {
+  let max = 0, top = null;
+  for (let name in counts) {
+    if (counts[name] > max) {
+      max = counts[name];
+      top = name;
+    }
+  }
+  return top;
+}
+
+function updateVotingMatrix() {
+  let html = '';
+  voteLogs.forEach(log => {
+    html += `<button class="collapsible">Phase ${log.phase} – Round ${log.round} Votes</button><div class="content"><table><tr><th>Voter</th><th>Voted For</th></tr>`;
+    log.votes.forEach(v => {
+      html += `<tr><td>${v.voter}</td><td>${v.vote}</td></tr>`;
+    });
+    html += `</table></div>`;
+  });
+  document.getElementById('votingMatrix').innerHTML = html;
+  setupCollapsibles();
+}
+
+function updateJuryMatrix() {
+  let html = `<table><tr><th>Juror</th><th>Phase Eliminated</th><th>Votes</th></tr>`;
+  juryVotes.forEach(j => {
+    html += `<tr><td>${j.juror}</td><td>${j.keysGiven}</td><td>${j.votes.join(', ')}</td></tr>`;
+  });
+  html += `</table>`;
+  document.getElementById('juryMatrix').innerHTML = html;
+}
+
+function updateProgressChart() {
+  let html = `<table><tr><th>Player</th><th>Phase 1</th><th>Phase 2</th><th>Phase 3</th><th>Total Keys</th></tr>`;
+  players.forEach(p => {
+    let p1 = p.phase >= 1 ? '✅' : '';
+    let p2 = p.phase >= 2 ? '✅' : '';
+    let p3 = p.phase === 3 ? '✅' : '';
+    html += `<tr><td>${p.name}</td><td>${p1}</td><td>${p2}</td><td>${p3}</td><td>${p.keys}</td></tr>`;
+  });
+  html += `</table>`;
+  document.getElementById('progressChart').innerHTML = html;
+}
+
+function createAlliances() {
+  let names = ['Alliance A', 'Alliance B', 'Alliance C'];
+  alliances = {};
+  names.forEach(name => {
+    let group = sample(players, 4);
+    alliances[name] = group.map(p => p.name);
+  });
+}
+
+function showAlliances() {
+  let html = '';
+  for (let name in alliances) {
+    html += `<strong>${name}:</strong> ${alliances[name].join(', ')}<br>`;
+  }
+  document.getElementById('alliancesList').innerHTML = html;
+}
+
+function setupCollapsibles() {
+  let coll = document.getElementsByClassName("collapsible");
+  for (let i = 0; i < coll.length; i++) {
+    coll[i].addEventListener("click", function () {
+      this.classList.toggle("active");
+      let content = this.nextElementSibling;
+      content.style.display = content.style.display === "block" ? "none" : "block";
+    });
+  }
+}
+
+function log(text) {
+  const box = document.getElementById('roundEvents');
+  box.innerHTML += text + '\n';
+}
   </script>
 
 </body>
