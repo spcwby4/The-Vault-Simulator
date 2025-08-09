@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>The Vault Simulator — Alt Rules (v3)</title>
+<title>The Vault Simulator — Alt Rules (v4)</title>
 <meta http-equiv="Content-Security-Policy" content="img-src 'self' https: data:;">
 <style>
   :root { --bg:#f6f7fb; --card:#fff; --line:#e5e7eb; --muted:#6b7280; --text:#0f172a; --btn:#111827; --btntext:#fff; --shade:#fafafa; }
@@ -22,6 +22,7 @@
   .row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
   .muted{color:var(--muted);font-size:12px}
   .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 8px;margin:3px 3px 0 0;font-size:12px}
+  .hidden{display:none!important}
 
   /* Round Events — restored look */
   #events .event{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);margin:8px 0}
@@ -33,8 +34,6 @@
   .vm th,.vm td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13px;text-align:left}
   .vm th{background:var(--shade);font-weight:600}
   .avatar{width:22px;height:22px;border-radius:4px;object-fit:cover;vertical-align:middle}
-  #controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .hidden{display:none!important}
 
   /* Modal */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999}
@@ -80,6 +79,16 @@
   </section>
 
   <section class="card">
+    <h2>Controls</h2>
+    <div class="content">
+      <div id="controls" class="row">
+        <button id="nextBtn" class="hidden">Next</button>
+        <button id="againBtn" class="hidden">Simulate Again</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Round Events</h2>
     <div class="content"><div id="events"></div></div>
   </section>
@@ -90,19 +99,14 @@
   </section>
 
   <section class="card">
-    <h2>Controls</h2>
-    <div class="content">
-      <div id="controls">
-        <button id="nextBtn" class="hidden">Next</button>
-        <button id="againBtn" class="hidden">Simulate Again</button>
-      </div>
-    </div>
+    <h2>Vote History (season)</h2>
+    <div class="content"><div id="voteHistory"></div></div>
   </section>
 
   <!-- RIGHT -->
   <section class="card">
     <h2>Alliances</h2>
-    <div id="alliancesBox" class="content"><div class="muted">Generated at start. Alliances influence votes and duel picks.</div></div>
+    <div id="alliancesBox" class="content"><div class="muted">Generated at start and may evolve. Alliances influence votes and duel picks.</div></div>
   </section>
 
   <section class="card">
@@ -137,21 +141,25 @@
   </section>
 </main>
 
-<!-- Image support -->
+<!-- Image helpers -->
 <script>
 function toDirectImgur(url){
   if(!url) return '';
+  // Direct i.imgur already good
   let m=url.match(/^https?:\/\/i\.imgur\.com\/([A-Za-z0-9]+)\.(?:jpg|jpeg|png|gif|webp|avif|gifv)$/i);
   if(m) return `https://i.imgur.com/${m[1]}.jpg`;
-  m=url.match(/^https?:\/\/imgur\.com\/(?:gallery|a)\/[A-Za-z0-9]+#([A-Za-z0-9]+)/i);
+  // gallery/album with specific image id in hash
+  m=url.match(/^https?:\/\/imgur\.com\/(?:gallery|a)\/[A-Za-z0-9]+#([A-Za-z0-9]+)$/i);
   if(m) return `https://i.imgur.com/${m[1]}.jpg`;
+  // single-page image id
   m=url.match(/^https?:\/\/imgur\.com\/([A-Za-z0-9]+)(?:[#?].*)?$/i);
   if(m) return `https://i.imgur.com/${m[1]}.jpg`;
+  // catch-all i.imgur with any extension
   m=url.match(/^https?:\/\/i\.imgur\.com\/([A-Za-z0-9]+)\.[A-Za-z0-9]+/i);
   if(m) return `https://i.imgur.com/${m[1]}.jpg`;
   return url;
 }
-const __PLACEHOLDER__ =
+const __PH__ =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
     <rect width="96" height="96" fill="#e5e7eb"/><circle cx="48" cy="36" r="18" fill="#9ca3af"/>
@@ -160,9 +168,9 @@ function setImageSrc(img,raw,alt='Image'){
   const u=toDirectImgur(raw||'');
   img.setAttribute('referrerpolicy','no-referrer');
   img.alt=alt;
-  img.src=u||__PLACEHOLDER__;
+  img.src=u||__PH__;
   let tried=false;
-  img.onerror=()=>{ if(!tried && /\.jpg$/i.test(img.src)){ tried=true; img.src=img.src.replace(/\.jpg$/i,'.png'); } else img.src=__PLACEHOLDER__; };
+  img.onerror=()=>{ if(!tried && /\.jpg$/i.test(img.src)){ tried=true; img.src=img.src.replace(/\.jpg$/i,'.png'); } else img.src=__PH__; };
 }
 function logEventWithImages(text,urls=[]){
   const feed=document.getElementById('events');
@@ -179,7 +187,7 @@ function logEventWithImages(text,urls=[]){
 
 <script>
 /* =========================
-   ALT VAULT — ENGINE v3
+   ALT VAULT — ENGINE v4
    ========================= */
 const UI = {
   playersInput: document.getElementById('playersInput'),
@@ -192,6 +200,7 @@ const UI = {
   phaseLabel:   document.getElementById('phaseLabel'),
   events:       document.getElementById('events'),
   vmWrap:       document.getElementById('voteMatrixWrap'),
+  voteHistory:  document.getElementById('voteHistory'),
   alliancesBox: document.getElementById('alliancesBox'),
   progressBody: document.getElementById('progressBody'),
   juryWrap:     document.getElementById('juryMatrixWrap'),
@@ -205,6 +214,10 @@ const S = {
   p1Jurors: [], p2Jurors: [], p3Jurors: [],
   finalists: [],
   p1Drawn: {},            // rIndex -> [names]
+  // Lockpick
+  lockpickHolder: null,
+  // Vote history (array of {phase, round, rows:[{voter, votedFor}]})
+  history: [],
 };
 
 /* ---------- Theme ---------- */
@@ -293,8 +306,7 @@ function buildPreseason(){
 
   function show(tab){ wrapAttr.style.display=(tab==='attr')?'block':'none'; wrapRel.style.display=(tab==='rel')?'block':'none';
     tAttr.classList.toggle('secondary', tab!=='attr'); tRel.classList.toggle('secondary', tab!=='rel'); }
-  show('attr');
-  tAttr.onclick=()=>show('attr'); tRel.onclick=()=>show('rel');
+  show('attr'); tAttr.onclick=()=>show('attr'); tRel.onclick=()=>show('rel');
 
   content.addEventListener('input',(e)=>{
     const t=e.target; const n=t.getAttribute('data-n'); const k=t.getAttribute('data-k');
@@ -346,7 +358,7 @@ function r(a,b){ return a+Math.floor(Math.random()*(b-a+1)); }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function choice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
-function weightPick(items, wfn){ let sum=0; items.forEach(it=>sum+=Math.max(1,wfn(it))); let r=Math.random()*sum; for(const it of items){ const w=Math.max(1,wfn(it)); if(r<w) return it; r-=w; } return items[items.length-1]; }
+function weightPick(items, wfn){ let sum=0; items.forEach(it=>sum+=Math.max(1,wfn(it))); let rr=Math.random()*sum; for(const it of items){ const w=Math.max(1,wfn(it)); if(rr<w) return it; rr-=w; } return items[items.length-1]; }
 function voteAmong(voters, targets, forbidSelf=true, tilt='neutral'){
   const map={};
   voters.forEach(v=>{
@@ -355,9 +367,8 @@ function voteAmong(voters, targets, forbidSelf=true, tilt='neutral'){
     if(forbidSelf) opts=opts.filter(n=>n!==v.name);
     const scored=opts.map(n=>{
       const t=byName(n);
-      // base influence: strat target strong players slightly; relationship: lower rel => more likely to vote against
-      let base = 50 + ((t?.attr.strat??5)-5)*4; // 1–10 -> -16..+20 range approx
-      const rel = v.rel?.[t.name] ?? 50;
+      let base = 50 + ((t?.attr.strat??5)-5)*4; // 1–10 scaled
+      const rel = v.rel?.[t?.name] ?? 50;
       base += (50-rel)/2;
       if(tilt==='ally' && a){ base = a.members.has(t.name)? 20: 80; }
       if(tilt==='outside' && a){ base = a.members.has(t.name)? 80: 20; }
@@ -369,7 +380,7 @@ function voteAmong(voters, targets, forbidSelf=true, tilt='neutral'){
 }
 function tally(map){ const t={}; Object.values(map).forEach(n=>t[n]=(t[n]||0)+1); return t; }
 function topAndTies(t){ const max=Math.max(...Object.values(t)); return {max, tied:Object.keys(t).filter(n=>t[n]===max)}; }
-function renderVoteMatrix(voters, map){
+function renderVoteMatrix(voters, map, intoEl){
   const table=document.createElement('table'); table.className='vm';
   const thead=document.createElement('thead'); const hr=document.createElement('tr');
   ['Voter','Voted For'].forEach(h=>{const th=document.createElement('th'); th.textContent=h; hr.appendChild(th);});
@@ -381,7 +392,9 @@ function renderVoteMatrix(voters, map){
     const tdT=document.createElement('td'); tdT.textContent=map[v.name]||'—';
     tr.appendChild(tdV); tr.appendChild(tdT); tb.appendChild(tr);
   });
-  table.appendChild(tb); UI.vmWrap.innerHTML=''; UI.vmWrap.appendChild(table);
+  table.appendChild(tb);
+  const host = intoEl || UI.vmWrap;
+  host.innerHTML=''; host.appendChild(table);
 }
 function renderProgress(){
   UI.progressBody.innerHTML='';
@@ -393,11 +406,28 @@ function renderProgress(){
     UI.progressBody.appendChild(tr);
   });
 }
+function pushHistory(phase,round,voters,map){
+  const rows=voters.map(v=>({voter:v.name, votedFor: map[v.name]}));
+  S.history.push({phase,round,rows});
+  // Render season history (append compact table)
+  const block=document.createElement('div'); block.style.marginBottom='8px';
+  const title=document.createElement('div'); title.className='muted'; title.textContent=`Phase ${phase} — Round ${round}`;
+  const wrap=document.createElement('div'); wrap.className='vm';
+  const tbl=document.createElement('table'); tbl.className='vm';
+  const thead=document.createElement('thead'); const hr=document.createElement('tr');
+  ['Voter','Voted For'].forEach(h=>{const th=document.createElement('th'); th.textContent=h; hr.appendChild(th);});
+  thead.appendChild(hr); tbl.appendChild(thead);
+  const tb=document.createElement('tbody');
+  rows.forEach(rw=>{ const tr=document.createElement('tr'); const td1=document.createElement('td'); td1.textContent=rw.voter; const td2=document.createElement('td'); td2.textContent=rw.votedFor; tr.appendChild(td1); tr.appendChild(td2); tb.appendChild(tr);});
+  tbl.appendChild(tb); wrap.appendChild(tbl);
+  block.appendChild(title); block.appendChild(wrap);
+  UI.voteHistory.appendChild(block);
+}
 
-/* ---------- Flavor events (up to 3 per round) ---------- */
+/* ---------- Flavor + Alliance evolution ---------- */
 function flavorEvents(tag){
   const pool=alive(); if(pool.length<2) return;
-  const num = r(1,3); // up to 3 per round
+  const num = r(1,3);
   for(let i=0;i<num;i++){
     const roll=Math.random();
     if(roll<0.45){ // bond
@@ -415,28 +445,51 @@ function flavorEvents(tag){
       logEventWithImages(`${tag}: ${a.name}, ${b.name}, and ${c.name} are spotted plotting—rumors intensify.`, [a.img||'', b.img||'', c.img||'']);
     }
   }
+  // Alliance evolution: ~20% chance of change
+  if(Math.random()<0.2 && S.alliances.length){
+    const pick=choice(S.alliances);
+    if(Math.random()<0.5 && pick.members.size>2){
+      // someone leaves
+      const leaver=choice([...pick.members]); pick.members.delete(leaver);
+      logEventWithImages(`Alliance shift: ${leaver} quietly distances from ${pick.name}.`, []);
+    } else {
+      // someone joins (not already member)
+      const opts=alive().map(p=>p.name).filter(n=>!pick.members.has(n));
+      if(opts.length){ const joiner=choice(opts); pick.members.add(joiner); logEventWithImages(`Alliance shift: ${joiner} is pulled into ${pick.name}.`, []); }
+    }
+    renderAlliances();
+  }
+}
+
+/* ---------- Lockpick ---------- */
+function tryFindLockpick(phase, round){
+  if(!((phase===1 && round<=4)||(phase===2 && round<=4))) return;
+  if(S.lockpickHolder) return;
+  if(Math.random()<0.33){
+    const pool=alive();
+    const finder=choice(pool);
+    S.lockpickHolder=finder.name;
+    logEventWithImages(`${finder.name} finds a Lockpick. It can be used before votes are read. (Not allowed in Last Chance rounds.)`, [finder.img||'']);
+  }
 }
 
 /* ======================
    PHASE 1 — 5 ROUNDS
    ====================== */
 function phase1Round(){
-  // Clear round events each round
   UI.events.innerHTML='';
-
-  const rIndex = (S.round||1) - 1; // 0..4
+  const rIndex=(S.round||1)-1;
 
   if(S.round<=4){
-    // Drawn set cached per round (fixes “redraw R1”)
+    // draw cache
     let drawn;
     if(!S.p1Drawn[rIndex]){
       const noKey = alive().filter(p=>!p.p1.includes('V') && !p.p1.includes('C'));
-      drawn = (S.round===4) ? noKey : shuffle(noKey).slice(0,6); // Round 4: all without P1 key
+      drawn = (S.round===4) ? noKey : shuffle(noKey).slice(0,6);
       S.p1Drawn[rIndex]=drawn.map(p=>p.name);
     } else {
       drawn = S.p1Drawn[rIndex].map(byName);
     }
-
     logEventWithImages(
       (S.round===4)
         ? `P1 R${S.round}: Round 4 exception — all without a P1 key are drawn.`
@@ -444,77 +497,84 @@ function phase1Round(){
       drawn.map(p=>p.img||'')
     );
 
-    // Vote (all 13)
-    const voters=S.roster;
-    const map = voteAmong(voters, drawn, true, 'neutral');
-    renderVoteMatrix(voters, map);
-    const t=tally(map); const tied=topAndTies(t).tied;
-
-    // Resolve (do NOT mark yet — commit marks AFTER round ends)
-    let voteKeyWinner=null, challengeWinner=null, voteKeyAwardedBy=null, revoteUsed=false, revoteTied=false;
-
-    if(tied.length===1){
-      voteKeyWinner = byName(tied[0]);
-    } else {
-      revoteUsed=true;
-      const tiedObjs=tied.map(byName);
-      logEventWithImages(`Tie among: ${tied.join(', ')}. Automatic revote.`, tiedObjs.map(p=>p.img||''));
-      const map2=voteAmong(voters, tiedObjs, true, 'neutral');
-      renderVoteMatrix(voters, map2);
-      const tied2=topAndTies(tally(map2)).tied;
-      if(tied2.length===1){
-        voteKeyWinner = byName(tied2[0]);
-      } else {
-        revoteTied=true;
-        // Challenge first; winner awards vote key to one of tied2
-        logEventWithImages(`Revote ties again. All drawn compete; winner will also award the vote key to one of the tied players.`, drawn.map(p=>p.img||''));
-        challengeWinner = weightPick(drawn, p=>Math.max(1,p.attr.comp)); // weighted by comp (1–10)
-        voteKeyAwardedBy = challengeWinner.name;
-        const tiedPrefer = tied2.map(byName).filter(p=>!p.p1.includes('V') && !p.p1.includes('C'));
-        voteKeyWinner = tiedPrefer.length ? choice(tiedPrefer) : byName(choice(tied2));
+    // Lockpick find + pre‑vote use
+    tryFindLockpick(1,S.round);
+    let forcedVoteKeyWinner=null;
+    if(S.lockpickHolder && S.round<=4){
+      const holder=byName(S.lockpickHolder);
+      if(holder && drawn.some(p=>p.name===holder.name)){
+        logEventWithImages(`${holder.name} uses the Lockpick before votes are read and secures the vote key.`, [holder.img||'']);
+        forcedVoteKeyWinner=holder; S.lockpickHolder=null;
       }
     }
 
-    // If we still need a challenge winner (normal case)
-    if(!challengeWinner){
-      const remain = drawn.filter(p=>p.name !== (voteKeyWinner?.name||'') && !p.p1.includes('V') && !p.p1.includes('C'));
-      const pool = remain.length ? remain : drawn.filter(p=>p.name !== (voteKeyWinner?.name||''));
-      challengeWinner = pool.length ? weightPick(pool, p=>Math.max(1,p.attr.comp)) : voteKeyWinner;
+    // Primary vote
+    const voters=S.roster;
+    const map = voteAmong(voters, drawn, true, 'neutral');
+    renderVoteMatrix(voters, map, UI.vmWrap);
+    pushHistory(1,S.round,voters,map);
+    let voteKeyWinner=null, challengeWinner=null;
+
+    if(forcedVoteKeyWinner){
+      voteKeyWinner=forcedVoteKeyWinner;
+    } else {
+      const t=tally(map); const tied=topAndTies(t).tied;
+      if(tied.length===1){
+        voteKeyWinner=byName(tied[0]);
+      } else {
+        logEventWithImages(`Tie among: ${tied.join(', ')}. Automatic revote.`, tied.map(n=>byName(n).img||''));
+        const map2=voteAmong(voters, tied.map(byName), true, 'neutral');
+        renderVoteMatrix(voters, map2, UI.vmWrap);
+        pushHistory(1,`${S.round} (revote)`,voters,map2);
+        const tied2=topAndTies(tally(map2)).tied;
+        if(tied2.length===1){
+          voteKeyWinner=byName(tied2[0]);
+        } else {
+          // Challenge first; winner assigns vote key to tied
+          logEventWithImages(`Revote ties again. All drawn compete; winner will award the vote key to one of the tied players.`, drawn.map(p=>p.img||''));
+          challengeWinner = weightPick(drawn, p=>Math.max(1,p.attr.comp));
+          const tiedPrefer = tied2.map(byName).filter(p=>!p.p1.includes('V') && !p.p1.includes('C'));
+          voteKeyWinner = tiedPrefer.length ? choice(tiedPrefer) : byName(choice(tied2));
+          // Commit after round ends; log now:
+          logEventWithImages(`${challengeWinner.name} wins the challenge key.`, [challengeWinner.img||'']);
+          logEventWithImages(`${challengeWinner.name} awards the vote key to ${voteKeyWinner.name}.`, [challengeWinner.img||'', voteKeyWinner.img||'']);
+        }
+      }
     }
 
-    // Round log texts
-    if(voteKeyAwardedBy){
-      logEventWithImages(`${challengeWinner.name} wins the challenge key.`, [challengeWinner.img||'']);
-      logEventWithImages(`${challengeWinner.name} awards the vote key to ${voteKeyWinner.name}.`, [challengeWinner.img||'', voteKeyWinner.img||'']);
-    } else {
+    // If challenge winner not set yet, run normal challenge
+    if(!challengeWinner){
+      const remain = drawn.filter(p=>p.name!==(voteKeyWinner?.name||'') && !p.p1.includes('V') && !p.p1.includes('C'));
+      const pool = remain.length ? remain : drawn.filter(p=>p.name!==(voteKeyWinner?.name||''));
+      challengeWinner = pool.length ? weightPick(pool, p=>Math.max(1,p.attr.comp)) : voteKeyWinner;
       logEventWithImages(`${voteKeyWinner.name} wins the vote and will receive the vote key.`, [voteKeyWinner.img||'']);
       logEventWithImages(`${challengeWinner.name} wins the challenge key.`, [challengeWinner.img||'']);
     }
 
-    // Flavor events (up to 3)
+    // Flavor + alliances
     flavorEvents(`P1 R${S.round} house event`);
 
-    // COMMIT MARKS AFTER ROUND ENDS
-    const idx = rIndex;
-    if(voteKeyWinner) S.roster.find(p=>p===voteKeyWinner).p1[idx]='V';
-    if(challengeWinner) S.roster.find(p=>p===challengeWinner).p1[idx]='C';
-
+    // Commit marks AFTER round ends
+    const idx=rIndex;
+    if(voteKeyWinner) voteKeyWinner.p1[idx]='V';
+    if(challengeWinner) challengeWinner.p1[idx]='C';
     renderProgress();
 
-    // Advance round
-    S.round += 1;
-    UI.phaseLabel.textContent=`Phase 1 — Round ${Math.min(S.round,5)} of 5`;
+    // Advance
+    S.round++; UI.phaseLabel.textContent=`Phase 1 — Round ${Math.min(S.round,5)} of 5`;
     if(S.round===5){
       logEventWithImages(`P1 R5 — Last Chance Vote: only the 5 without keys vote; winner gets a key, others eliminated to Phase 1 jury.`,[]);
     }
+
   } else if (S.round===5){
-    UI.events.innerHTML=''; UI.vmWrap.innerHTML='';
+    UI.vmWrap.innerHTML='';
     const noKey = alive().filter(p=>!p.p1.includes('V') && !p.p1.includes('C'));
     if(noKey.length){
       const map=voteAmong(noKey, noKey, true, 'neutral');
-      renderVoteMatrix(noKey, map);
+      renderVoteMatrix(noKey, map, UI.vmWrap);
+      pushHistory(1,'5 (LCV)',noKey,map);
       const winner=byName(choice(topAndTies(tally(map)).tied));
-      S.roster.find(p=>p===winner).p1[4]='V';
+      winner.p1[4]='V';
       logEventWithImages(`${winner.name} receives the Last Chance vote key.`, [winner.img||'']);
       const elim = alive().filter(p=>!p.p1.includes('V') && !p.p1.includes('C'));
       elim.forEach(p=>{ p.alive=false; S.p1Jurors.push(p.name); });
@@ -537,50 +597,63 @@ function phase1Round(){
    ====================== */
 function phase2Round(){
   UI.events.innerHTML='';
-
   const rIndex=(S.round||1)-1;
 
   if(S.round<=4){
+    tryFindLockpick(2,S.round);
+    let forcedVoteWinnerP2=null;
+    if(S.lockpickHolder && S.round<=4){
+      const holder=byName(S.lockpickHolder);
+      if(holder){
+        logEventWithImages(`${holder.name} uses the Lockpick before votes are read and gains control to set the duel.`, [holder.img||'']);
+        forcedVoteWinnerP2=holder; S.lockpickHolder=null;
+      }
+    }
+
     const players=alive(); const elig=players.filter(p=>!p.p2.includes('K'));
     const voters=players;
     const map=voteAmong(voters, elig, true, 'outside');
-    renderVoteMatrix(voters, map);
-    const tied=topAndTies(tally(map)).tied;
+    renderVoteMatrix(voters, map, UI.vmWrap);
+    pushHistory(2,S.round,voters,map);
 
     let voteWinner=null, opponent=null, duelWinner=null;
 
-    if(tied.length===1){
-      voteWinner=byName(tied[0]);
-      logEventWithImages(`House selects ${voteWinner.name} to set the duel.`, [voteWinner.img||'']);
-    } else if (tied.length===2){
-      logEventWithImages(`Two-way tie between ${tied.join(' & ')}. Revote between tied only.`, tied.map(n=>byName(n).img||''));
-      const map2=voteAmong(voters, tied.map(byName), true, 'neutral');
-      renderVoteMatrix(voters, map2);
-      voteWinner=byName(choice(topAndTies(tally(map2)).tied));
-      logEventWithImages(`${voteWinner.name} wins the revote to set the duel.`, [voteWinner.img||'']);
-    } else if (tied.length===3){
-      logEventWithImages(`Three-way tie among ${tied.join(', ')}. Triple duel!`, tied.map(n=>byName(n).img||''));
-      duelWinner=weightPick(tied.map(byName), p=>Math.max(1,p.attr.comp));
-      // Commit after round end:
-      S.roster.find(p=>p===duelWinner).p2[rIndex]='K';
-      logEventWithImages(`${duelWinner.name} wins the triple duel and the Phase 2 key.`, [duelWinner.img||'']);
-      flavorEvents(`P2 R${S.round} house event`);
-      renderProgress();
-      S.round++; UI.phaseLabel.textContent=`Phase 2 — Round ${Math.min(S.round,5)} of 5`;
-      if(S.round===5) logEventWithImages(`P2 R5 — Last Chance Challenge: the 5 without P2 keys compete.`,[]);
-      return;
+    if(forcedVoteWinnerP2){
+      voteWinner=forcedVoteWinnerP2;
     } else {
-      const tiedSet=new Set(tied);
-      const breakers=voters.filter(v=>!tiedSet.has(map[v.name]));
-      if(breakers.length){
-        const breaker=choice(breakers);
-        voteWinner=byName(choice(tied));
-        logEventWithImages(`Multi-way tie. ${breaker.name} (didn’t vote tied) breaks → ${voteWinner.name} sets the duel.`, [breaker.img||'', voteWinner.img||'']);
+      const tied=topAndTies(tally(map)).tied;
+      if(tied.length===1){
+        voteWinner=byName(tied[0]);
+      } else if (tied.length===2){
+        logEventWithImages(`Two-way tie between ${tied.join(' & ')}. Revote between tied only.`, tied.map(n=>byName(n).img||''));
+        const map2=voteAmong(voters, tied.map(byName), true, 'neutral');
+        renderVoteMatrix(voters, map2, UI.vmWrap);
+        pushHistory(2,`${S.round} (revote)`,voters,map2);
+        voteWinner=byName(choice(topAndTies(tally(map2)).tied));
+      } else if (tied.length===3){
+        logEventWithImages(`Three-way tie among ${tied.join(', ')}. Triple duel!`, tied.map(n=>byName(n).img||''));
+        duelWinner=weightPick(tied.map(byName), p=>Math.max(1,p.attr.comp));
+        duelWinner.p2[rIndex]='K';
+        logEventWithImages(`${duelWinner.name} wins the triple duel and the Phase 2 key.`, [duelWinner.img||'']);
+        flavorEvents(`P2 R${S.round} house event`); renderProgress();
+        S.round++; UI.phaseLabel.textContent=`Phase 2 — Round ${Math.min(S.round,5)} of 5`;
+        if(S.round===5) logEventWithImages(`P2 R5 — Last Chance Challenge: the 5 without P2 keys compete.`,[]);
+        return;
       } else {
-        voteWinner=byName(choice(tied));
-        logEventWithImages(`Multi-way tie with no breaker. Randomly choosing ${voteWinner.name} to set the duel.`, [voteWinner.img||'']);
+        const tiedSet=new Set(tied);
+        const breakers=voters.filter(v=>!tiedSet.has(map[v.name]));
+        if(breakers.length){
+          const breaker=choice(breakers);
+          voteWinner=byName(choice(tied));
+          logEventWithImages(`Multi-way tie. ${breaker.name} (didn’t vote tied) breaks → ${voteWinner.name} sets the duel.`, [breaker.img||'', voteWinner.img||'']);
+        } else {
+          voteWinner=byName(choice(tied));
+          logEventWithImages(`Multi-way tie with no breaker. Randomly choosing ${voteWinner.name} to set the duel.`, [voteWinner.img||'']);
+        }
       }
     }
+
+    logEventWithImages(`House selects ${voteWinner.name} to set the duel.`, [voteWinner.img||'']);
 
     const options=elig.filter(p=>p.name!==voteWinner.name);
     const ally=S.alliances.find(a=>a.members.has(voteWinner.name));
@@ -588,8 +661,7 @@ function phase2Round(){
     logEventWithImages(`${voteWinner.name} chooses to duel ${opponent.name}.`, [voteWinner.img||'', opponent.img||'']);
 
     duelWinner=weightPick([voteWinner,opponent], p=>Math.max(1,p.attr.comp + (p.attr.strat-5)*1.5));
-    // Commit after round end:
-    S.roster.find(p=>p===duelWinner).p2[rIndex]='K';
+    duelWinner.p2[rIndex]='K';
     logEventWithImages(`${duelWinner.name} wins the duel and the Phase 2 key.`, [duelWinner.img||'']);
 
     flavorEvents(`P2 R${S.round} house event`);
@@ -602,7 +674,7 @@ function phase2Round(){
     const pool = noP2.length>5 ? shuffle(noP2).slice(0,5) : noP2;
     logEventWithImages(`Last Chance Challenge among: ${pool.map(p=>p.name).join(', ')}`, pool.map(p=>p.img||''));
     const w=weightPick(pool, p=>Math.max(1,p.attr.comp));
-    S.roster.find(p=>p===w).p2[4]='K';
+    w.p2[4]='K';
     logEventWithImages(`${w.name} wins the last Phase 2 key.`, [w.img||'']);
 
     const losers = alive().filter(p=>!p.p2.includes('K'));
@@ -623,7 +695,6 @@ function phase2Round(){
 function phase3Run(){
   UI.events.innerHTML=''; UI.vmWrap.innerHTML='';
   const five=alive();
-  // vote favors allies + social
   const map=(function(){ const res={}; five.forEach(v=>{
     const choices=five.filter(p=>p!==v);
     const scores=choices.map(t=>{
@@ -632,13 +703,13 @@ function phase3Run(){
     });
     res[v.name]=weightPick(scores, s=>s.w).t.name;
   }); return res;})();
-  renderVoteMatrix(five, map);
+  renderVoteMatrix(five, map, UI.vmWrap);
+  pushHistory(3,1,five,map);
   const voteWinner=byName(choice(topAndTies(tally(map)).tied));
   const others=five.filter(p=>p!==voteWinner);
   const pick=weightPick(others, p=>Math.max(1,(voteWinner.rel?.[p.name]??50)+(p.attr.soc-5)*5));
   const rest=others.filter(p=>p!==pick);
 
-  // Commit marks after round end
   voteWinner.p3=true; pick.p3=true;
   logEventWithImages(`${voteWinner.name} wins the vote and advances, choosing ${pick.name}. The remaining three compete for the last spot.`, [voteWinner.img||'', pick.img||'']);
   const duelWinner=weightPick(rest, p=>Math.max(1,p.attr.comp + (p.attr.strat-5)*4)); duelWinner.p3=true;
@@ -664,7 +735,7 @@ function runFinale(){
   S.p2Jurors.forEach(n=>budgets.set(n,(budgets.get(n)||0)+2));
   S.p3Jurors.forEach(n=>budgets.set(n,(budgets.get(n)||0)+3));
 
-  // Clamp to exactly 18 jury keys
+  // Clamp to 18 jury keys
   let total=0; budgets.forEach(v=>total+=v);
   if(total!==18){
     const jurors=[...budgets.keys()];
@@ -756,10 +827,11 @@ function renderJuryMatrix(perJuror, budgets, finalists, finalistTotals){
 
 /* ---------- Wiring ---------- */
 function resetAll(){
-  S.phase=0; S.round=0; S.roster=[]; S.alliances=[]; S.p1Jurors=[]; S.p2Jurors=[]; S.p3Jurors=[]; S.finalists=[]; S.p1Drawn={};
+  S.phase=0; S.round=0; S.roster=[]; S.alliances=[]; S.p1Jurors=[]; S.p2Jurors=[]; S.p3Jurors=[]; S.finalists=[]; S.p1Drawn={}; S.history=[]; S.lockpickHolder=null;
   UI.events.innerHTML=''; UI.vmWrap.innerHTML=''; UI.juryWrap.innerHTML=''; UI.progressBody.innerHTML=''; UI.phaseLabel.textContent='';
+  UI.voteHistory.innerHTML='';
   UI.nextBtn.classList.add('hidden'); UI.againBtn.classList.add('hidden');
-  UI.alliancesBox.innerHTML='<div class="muted">Generated at start. Alliances influence votes and duel picks.</div>';
+  UI.alliancesBox.innerHTML='<div class="muted">Generated at start and may evolve. Alliances influence votes and duel picks.</div>';
 }
 function startGame(){
   if(S.phase){ if(!confirm('A season is in progress. Start a new one?')) return; }
@@ -772,7 +844,7 @@ function startGame(){
       attr:{soc:5,comp:5,strat:5}, rel:{} }));
     S.roster.forEach(a=>S.roster.forEach(b=>{ if(a.name!==b.name) a.rel[b.name]=50; }));
   }
-  genAlliances(); renderProgress();
+  genAlliances(); renderAlliances(); renderProgress();
   S.phase=1; S.round=1; UI.phaseLabel.textContent='Phase 1 — Round 1 of 5';
   logEventWithImages('Phase 1 begins. Rounds 1–4: draw 6, vote, challenge. Round 5: Last Chance Vote.',[]);
   UI.nextBtn.classList.remove('hidden'); UI.againBtn.classList.add('hidden');
