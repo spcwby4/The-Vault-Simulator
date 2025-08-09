@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>The Vault Simulator — Season Controls + 3‑Way Duel</title>
+<title>The Vault Simulator — Tight Scenes & Episode Rounds</title>
 <style>
   :root{
-    --bg:#0f1115; --panel:#161a22; --panel2:#1c2130; --muted:#2a2f3a; --text:#e5e7eb; --sub:#aeb4c0; 
+    --bg:#0f1115; --panel:#161a22; --panel2:#1c2130; --muted:#2a2f3a; --text:#e5e7eb; --sub:#aeb4c0;
     --accent:#7aa2ff; --good:#6ee7b7; --warn:#fbbf24; --bad:#f87171; --border:#2b3340;
   }
   *{box-sizing:border-box}
@@ -23,7 +23,6 @@
   .epItem{padding:10px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
   .epItem:last-child{border-bottom:none}
   .thumb{width:36px;height:36px;border-radius:8px;background:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px}
-  .spoiler{opacity:.45}
   .main{padding:18px;display:grid;gap:16px}
   .box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}
   .row{display:flex;gap:14px;flex-wrap:wrap}
@@ -37,15 +36,13 @@
   .avatar{width:22px;height:22px;border-radius:6px;object-fit:cover;background:var(--muted);display:inline-flex;align-items:center;justify-content:center;font-size:11px}
   .hint{font-size:13px;color:var(--sub)}
   .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub)}
-
-  /* Mobile */
   @media (max-width: 900px){
     .app{grid-template-columns:1fr}
     .sidebar{position:relative;height:auto}
     .hamburger{display:inline-block}
     .sidebar.collapsed .collapsible-area{display:none}
     .main{padding:12px}
-    textarea,button,input,select{font-size:16px} /* avoid iOS zoom */
+    textarea,button,input,select{font-size:16px}
     pre{min-height:180px}
   }
 </style>
@@ -73,14 +70,8 @@
         </select>
         <hr style="border-color:var(--border);margin:12px 0">
         <h3 style="margin:0 0 6px;font-size:15px">Twists (season‑wide)</h3>
-        <label class="toggle">
-          <input type="checkbox" id="tw_noLockpick"/>
-          No Lockpick this season
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="tw_doubleDuel"/>
-          Double Duel (vote winner faces TWO in a single 3‑way duel)
-        </label>
+        <label class="toggle"><input type="checkbox" id="tw_noLockpick"/> No Lockpick this season</label>
+        <label class="toggle"><input type="checkbox" id="tw_doubleDuel"/> Double Duel (picker names TWO; one **3‑way duel** for the key)</label>
         <div class="hint">These lock and disappear after you press <em>Start Season</em>.</div>
       </div>
 
@@ -99,7 +90,7 @@
             <button id="startBtn">Start Season</button>
             <button id="nextBtn" style="display:none;">Next Scene ▶</button>
           </div>
-          <div class="hint">Episode mapping: <strong>Each round = 1 episode.</strong> Episode 1 is Phase 1 Round 1. Finale is its own episode.</div>
+          <div class="hint">Each episode = exactly one round. Episode 1 is Phase 1, Round 1.</div>
         </div>
         <div class="col" id="castBox">
           <h2>Cast Photos & Colors</h2>
@@ -143,7 +134,7 @@
 
     <div class="box">
       <h2>Round Events (Scene feed)</h2>
-      <pre id="sceneFeed">(Scene ready) Tap “Next Scene” to begin.</pre>
+      <pre id="sceneFeed">(Ready) Tap “Next Scene”.</pre>
     </div>
 
     <div class="row">
@@ -193,7 +184,7 @@ var lockpickHolder=null, lockpickUsed=false, lockpickFound=false;
 var voteColumns=[], knownVoters=[], vaults=[]; for(var i=3;i<=22;i++) vaults.push(i);
 var gameStarted=false;
 
-/* Episodes */
+/* Episodes / scenes */
 var episodes=[], currentEpisode=null, sceneQueue=[], sceneIndex=0, spoilerFree=false;
 
 /* Stats / rel / cast */
@@ -296,59 +287,22 @@ function renderRelEditorFor(focus){
   }</table>`;
   relEditorDiv.querySelectorAll('.relSpin').forEach(sp=> sp.oninput=()=>{ const f=sp.dataset.focus,t=sp.dataset.target; setRel(f,t,clamp(parseInt(sp.value||'0',10),-5,5)); renderRelsLive(); });
 }
-document.getElementById('relSave').onclick=()=>{
-  relEditorDiv.querySelectorAll('.relSpin').forEach(sp=>{ const f=sp.dataset.focus,t=sp.dataset.target; setRel(f,t,clamp(parseInt(sp.value||'0',10),-5,5)); });
-  const names=preNames(); names.forEach(a=>names.forEach(b=>{ if(a!==b) setRel(a,b,getRel(a,b)); }));
-  queueScene('Saved all preseason relationships.'); renderRelsLive();
-};
-document.getElementById('relRandFocus').onclick=()=>{
-  const f=relFocusSel.value; relEditorDiv.querySelectorAll('.relSpin').forEach(sp=>{ const t=sp.dataset.target; const v=Math.floor(-2+Math.random()*5); setRel(f,t,v); sp.value=v; });
-  queueScene('Randomized (mild) relationships for '+f+'.'); renderRelsLive();
-};
-document.getElementById('relClearFocus').onclick=()=>{
-  const f=relFocusSel.value; relEditorDiv.querySelectorAll('.relSpin').forEach(sp=>{ const t=sp.dataset.target; setRel(f,t,0); sp.value=0; });
-  queueScene('Cleared relationships for '+f+'.'); renderRelsLive();
-};
-document.getElementById('relRandAll').onclick=()=>{
-  const names=preNames(); for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++){ setRel(names[i],names[j],Math.floor(-2+Math.random()*5)); }
-  queueScene('Randomized (mild) relationships for all.'); renderRelEditorFor(relFocusSel.value); renderRelsLive();
-};
-document.getElementById('relClearAll').onclick=()=>{
-  const names=preNames(); for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++){ setRel(names[i],names[j],0); }
-  queueScene('Cleared all preseason relationships.'); renderRelEditorFor(relFocusSel.value); renderRelsLive();
-};
 
-/* ===== Episode system ===== */
-function newEpisode(title){
-  const ep={title:title||('Episode '+(episodes.length+1)), scenes:[]};
-  episodes.push(ep); currentEpisode=ep; sceneQueue=[]; sceneIndex=0; renderEpisodeNav();
-}
-function addScene(label, line){
-  if(!currentEpisode) newEpisode();
-  let s=currentEpisode.scenes[currentEpisode.scenes.length-1];
-  if(!s || s.label!==label){ s={label:label,lines:[]}; currentEpisode.scenes.push(s); }
-  s.lines.push(line); sceneQueue.push(line);
-}
-function queueScene(t){ sceneQueue.push(t); }
-function nextSceneClick(){
-  if(!sceneQueue.length){ progressGame(); return; }
-  const line=sceneQueue.shift();
-  sceneFeed.textContent += (sceneFeed.textContent?'\n':'') + line;
-  sceneFeed.scrollTop=sceneFeed.scrollHeight;
-  sceneIndex++; renderEpisodeNav();
-}
+/* ===== Episode system (fixed titles + clear-per-scene) ===== */
+function epTitle(){ return `Episode ${episodes.length+1} — Phase ${phase} R${round}`; }
+function newEpisode(){ const ep={title:epTitle(), scenes:[]}; episodes.push(ep); currentEpisode=ep; sceneQueue=[]; sceneIndex=0; renderEpisodeNav(); }
+function addScene(text){ sceneQueue.push(text); }
+function showLine(text){ sceneFeed.textContent = text; } // CLEAR and show
+function nextSceneClick(){ if(!sceneQueue.length){ progressGame(); return; } showLine(sceneQueue.shift()); sceneIndex++; renderEpisodeNav(); }
 function renderEpisodeNav(){
-  const shown = (i)=> (spoilerFree && i===episodes.length-1)? sceneIndex : episodes[i].scenes.reduce((a,s)=>a+s.lines.length,0);
-  const total = (i)=> episodes[i].scenes.reduce((a,s)=>a+s.lines.length,0);
   epListDiv.innerHTML = episodes.map((ep,i)=>`
-    <div class="${(spoilerFree&&i===episodes.length-1)?'epItem spoiler':'epItem'}">
+    <div class="epItem">
       <div class="thumb">${i+1}</div>
       <div style="flex:1">
-        <input data-epi="${i}" class="epTitle" value="${ep.title}" style="width:100%;padding:6px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">
-        <div><small>${shown(i)} / ${total(i)} scenes</small></div>
+        <div>${ep.title}</div>
+        <div><small>${(i===episodes.length-1?sceneIndex:ep.scenes?.length||0)} scenes viewed</small></div>
       </div>
     </div>`).join('');
-  epListDiv.querySelectorAll('.epTitle').forEach(inp=> inp.oninput=()=>{ episodes[+inp.dataset.epi].title=inp.value; });
 }
 
 /* ===== Start Season ===== */
@@ -366,20 +320,14 @@ function startSeason(){
 
   gameStarted=true;
   startBtn.style.display='none'; nextBtn.style.display='inline-block';
-
-  // hide season controls + preseason editors
   document.getElementById('seasonControls').style.display='none';
   document.getElementById('castBox').style.display='none';
   document.getElementById('preseasonBox').style.display='none';
 
   generateAlliancesPreset();
-
-  phase=1; round=1;
-  newEpisode('Episode 1 — Phase 1 R1');
-  sceneFeed.textContent='';
-  queueScene('Season begins. Phase 1: The Key Quest.');
-  queueScene('Alliances formed: '+Object.entries(alliances).map(e=>`${e[0]}: ${e[1].join(', ')}`).join(' | '));
-  progressGame();
+  phase=1; round=1; newEpisode(); showLine('(Ready) Tap “Next Scene”.');
+  addScene('Season begins. Phase 1: The Key Quest.');
+  addScene('Alliances formed: '+Object.entries(alliances).map(e=>`${e[0]}: ${e[1].join(', ')}`).join(' | '));
 }
 
 /* ===== Alliances ===== */
@@ -395,18 +343,13 @@ function generateAlliancesPreset(){
   const labels='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, (bias.duo?6 : bias.loners?3 : 4)).split('');
   labels.forEach(k=> alliances[k]=[]);
   const sh=shuffle(players);
-
-  if(bias.duo){
-    for(let i=0;i<sh.length;i+=2){ alliances[labels[(i/2)%labels.length]].push(sh[i], sh[i+1]); }
-  } else if(bias.loners){
+  if(bias.duo){ for(let i=0;i<sh.length;i+=2){ alliances[labels[(i/2)%labels.length]].push(sh[i], sh[i+1]); } }
+  else if(bias.loners){ for(let i=0;i<sh.length;i++){ alliances[labels[i%labels.length]].push(sh[i]); } }
+  else {
     for(let i=0;i<sh.length;i++){ alliances[labels[i%labels.length]].push(sh[i]); }
-  } else {
-    for(let i=0;i<sh.length;i++){ alliances[labels[i%labels.length]].push(sh[i]); }
-    if(bias.fluid){
-      for(let i=0;i<players.length;i++) if(Math.random()<0.18){
-        const p=players[i]; const other=labels[Math.floor(Math.random()*labels.length)];
-        if(!alliances[other].includes(p)) alliances[other].push(p);
-      }
+    if(bias.fluid) for(let i=0;i<players.length;i++) if(Math.random()<0.18){
+      const p=players[i]; const other=labels[Math.floor(Math.random()*labels.length)];
+      if(!alliances[other].includes(p)) alliances[other].push(p);
     }
   }
   updateAlliances();
@@ -456,10 +399,34 @@ function addVoteColumn(label,phaseTag,roundNo,voters,votePairs,result,lockUser){
   voteColumns.push({label,phaseTag,roundNo,result,values}); renderMasterVoteTable();
 }
 
+/* ===== Relationship change helpers ===== */
+function postVoteRelChanges(winner, drawn, votePairs){
+  // Small bumps: voters who targeted winner & are allies → +1; rivals who got targeted by winner → −1
+  const targetedBy=votePairs.filter(([_,to])=>to===winner).map(([v,_])=>v);
+  targetedBy.forEach(v=>{
+    if(inAlliance(v,winner)) setRel(v,winner, clamp(getRel(v,winner)+1,-5,5));
+  });
+  // soften: minor nudge among drawn who lost to winner
+  drawn.filter(p=>p!==winner).forEach(p=>{
+    if(!inAlliance(p,winner)) setRel(p,winner, clamp(getRel(p,winner)-1,-5,5));
+  });
+  renderRelsLive();
+  addScene('Post‑vote relationship ripples update.');
+}
+function postPickRelChanges(picker, picks, hadAllyOption){
+  // If picker chose an ally → +1 with that ally. If skipped available ally → −1 with closest ally.
+  picks.forEach(o=>{ if(inAlliance(picker,o)) setRel(picker,o, clamp(getRel(picker,o)+1,-5,5)); else setRel(picker,o, clamp(getRel(picker,o)-1,-5,5)); });
+  if(hadAllyOption && picks.every(o=>!inAlliance(picker,o))){
+    const allies = players.filter(p=>p!==picker && inAlliance(picker,p));
+    allies.forEach(a=> setRel(picker,a, clamp(getRel(picker,a)-1,-5,5)));
+  }
+  renderRelsLive();
+  addScene('Post‑pick relationship ripples update.');
+}
+
 /* ===== Driver ===== */
 function progressGame(){
   updateAlliances(); updateProgress(); renderRelsLive(); renderEpisodeNav();
-
   if(phase===1){ runPhase1(); return; }
   if(phase===2){ runPhase2(); return; }
   if(phase===3){ runPhase3(); return; }
@@ -491,79 +458,89 @@ function tally(votePairs, eligible){
   return [tied[0], tied, counts];
 }
 
-/* ===== Phase 1 ===== */
+/* ===== Phase 1: segments: vote → post‑vote rels → 3‑way challenge among others → winner ===== */
 function runPhase1(){
-  if(p1_step===0){
-    const p1Count=Object.values(keys).reduce((a,k)=>a+(k.includes?.('P1')?1:0),0);
-    if(round>4 || p1Count>=8){ addScene('Phase','Phase 1 complete.'); phase=2; round=1; newEpisode('Episode '+(episodes.length+1)+' — Phase 2 R1'); return; }
+  // End gate
+  const p1Count=Object.values(keys).reduce((a,k)=>a+(k.includes?.('P1')?1:0),0);
+  if(round>4 || p1Count>=8){ phase=2; round=1; newEpisode(); addScene('Phase 2 begins.'); return; }
 
-    addScene('Episode', currentEpisode.title+' begins.');
-    // draw
+  // Segment switch
+  if(p1_step===0){
+    // draw & vote
     const eligible=players.filter(p=>!keys[p].includes('P1'));
     p1_drawn=shuffle(eligible).slice(0,4);
-    addScene('Draw','Drawn: '+p1_drawn.join(', '));
+    addScene('Drawn: '+p1_drawn.join(', '));
 
-    // lockpick find (respect season toggle)
     if(!SEASON.noLockpick && !lockpickFound && Math.random()<0.33){
       lockpickHolder=p1_drawn[Math.floor(Math.random()*p1_drawn.length)]; lockpickFound=true;
-      addScene('Find','LOCKPICK discovered by '+lockpickHolder+'.');
+      addScene('LOCKPICK discovered by '+lockpickHolder+'.');
     }
 
-    // vote
     p1_votePairs=simulateVote(knownVoters, p1_drawn);
     let [winner] = tally(p1_votePairs, p1_drawn);
     p1_lockUser=null;
     if(!SEASON.noLockpick && lockpickHolder && !lockpickUsed && p1_drawn.includes(lockpickHolder)){
       const mustUse=(round===4 && !keys[lockpickHolder].includes('P1'));
-      if(mustUse || Math.random()<0.2){ winner=lockpickHolder; p1_lockUser=lockpickHolder; lockpickUsed=true; addScene('Lockpick', lockpickHolder+' overrides the vote.'); }
+      if(mustUse || Math.random()<0.2){ winner=lockpickHolder; p1_lockUser=lockpickHolder; lockpickUsed=true; addScene(lockpickHolder+' uses LOCKPICK to override.'); }
     }
     p1_winner=winner;
-    addVoteColumn('P1 R'+round,'P1',round,knownVoters,p1_votePairs,p1_winner,p1_lockUser);
-    addScene('Result', p1_winner+' wins the vote key.');
+    addVoteColumn(`P1 R${round}`,'P1',round,knownVoters,p1_votePairs,p1_winner,p1_lockUser);
+    addScene(`${p1_winner} wins the vote key.`);
     keys[p1_winner].push('P1'); keysEarned[p1_winner].P1=(keysEarned[p1_winner].P1||0)+1; wins[p1_winner]=(wins[p1_winner]||0)+1;
 
     p1_step=1; return;
   }
   if(p1_step===1){
-    const challengers=p1_drawn.filter(p=>p!==p1_winner && !keys[p].includes('P1'));
-    if(challengers.length){
-      p1_challengeWinner=weighted(challengers, p=>Math.pow(stats[p]?.challenge||8,BETA_CHALLENGE));
-      addScene('Challenge', p1_challengeWinner+' wins the challenge key.');
-      keys[p1_challengeWinner].push('P1'); keysEarned[p1_challengeWinner].P1=(keysEarned[p1_challengeWinner].P1||0)+1; wins[p1_challengeWinner]=(wins[p1_challengeWinner]||0)+1;
+    // Post‑vote relationship changes
+    postVoteRelChanges(p1_winner, p1_drawn, p1_votePairs);
+    p1_step=2; return;
+  }
+  if(p1_step===2){
+    // 3‑person challenge among others
+    const others=p1_drawn.filter(p=>p!==p1_winner && !keys[p].includes('P1'));
+    if(others.length){
+      const w = weighted(others, p=>Math.pow(stats[p]?.challenge||8,BETA_CHALLENGE));
+      p1_challengeWinner=w;
+      addScene(`Challenge: ${others.join(' vs ')} → ${w} wins the challenge key.`);
+      keys[w].push('P1'); keysEarned[w].P1=(keysEarned[w].P1||0)+1; wins[w]=(wins[w]||0)+1;
     } else {
-      addScene('Challenge','No challenge key awarded.');
+      addScene('No challenge key this round.');
     }
     updateProgress(); renderRelsLive(); renderMasterVoteTable();
-    round++; p1_step=0; newEpisode('Episode '+episodes.length+' — Phase 1 R'+round);
+    round++; p1_step=0; newEpisode();
   }
 }
 
-/* ===== Phase 2 (single 3‑way duel if Double Duel is ON) ===== */
+/* ===== Phase 2: vote → post‑vote rels → pick(s) → post‑pick rels → duel (1v1 or 3‑way) ===== */
 function runPhase2(){
+  // End gate
+  const p2Count=Object.values(keys).reduce((a,k)=>a+(k.includes?.('P2')?1:0),0);
+  if(round>4 || p2Count>=4){ phase=3; round=1; newEpisode(); addScene('Phase 3 begins.'); return; }
+
   if(p2_step===0){
-    const p2Count=Object.values(keys).reduce((a,k)=>a+(k.includes?.('P2')?1:0),0);
-    if(round>4 || p2Count>=4){ addScene('Phase','Phase 2 complete.'); phase=3; round=1; newEpisode('Episode '+(episodes.length+1)+' — Phase 3'); return; }
-
-    addScene('Phase','Phase 2 — Round '+round);
+    addScene(`Phase 2 — Round ${round}`);
     p2_noKey=players.filter(p=>!keys[p].includes('P2'));
-    if(p2_noKey.length<2){ addScene('Info','Not enough no‑key players. Moving to Phase 3.'); phase=3; round=1; newEpisode('Episode '+(episodes.length+1)+' — Phase 3'); return; }
+    if(p2_noKey.length<2){ phase=3; round=1; newEpisode(); addScene('Phase 3 begins.'); return; }
 
-    // vote winner
     p2_votePairs=simulateVote(players,p2_noKey);
     let [winner] = tally(p2_votePairs,p2_noKey);
     p2_lockUser=null;
     if(!SEASON.noLockpick && lockpickHolder && !lockpickUsed && p2_noKey.includes(lockpickHolder) && !keys[lockpickHolder].includes('P2')){
-      if(Math.random()<0.6){ winner=lockpickHolder; p2_lockUser=lockpickHolder; lockpickUsed=true; addScene('Lockpick', lockpickHolder+' auto‑wins the vote.'); }
+      if(Math.random()<0.6){ winner=lockpickHolder; p2_lockUser=lockpickHolder; lockpickUsed=true; addScene(lockpickHolder+' auto‑wins via LOCKPICK.'); }
     }
     p2_winner=winner;
-    addVoteColumn('P2 R'+round,'P2',round,knownVoters,p2_votePairs,p2_winner,p2_lockUser);
-    addScene('Result', p2_winner+' wins the vote and will pick '+(SEASON.doubleDuel?'two opponents for a 3‑way duel.':'an opponent for a duel.'));
+    addVoteColumn(`P2 R${round}`,'P2',round,knownVoters,p2_votePairs,p2_winner,p2_lockUser);
+    addScene(`${p2_winner} wins the vote and will choose ${SEASON.doubleDuel?'two opponents (3‑way duel).':'an opponent.'}`);
     p2_step=1; return;
   }
-
   if(p2_step===1){
+    // Post‑vote relationship ripples
+    postVoteRelChanges(p2_winner, p2_noKey, p2_votePairs);
+    p2_step=2; return;
+  }
+  if(p2_step===2){
+    // Picks
     const candidates=p2_noKey.filter(p=>p!==p2_winner);
-    // chooser helper
     function chooseOpponent(fromPool){
       const allies = fromPool.filter(p => inAlliance(p, p2_winner));
       const nonAllies = fromPool.filter(p => !inAlliance(p, p2_winner));
@@ -578,70 +555,50 @@ function runPhase2(){
       const pick = weighted(fromPool, p => relFactor(p2_winner,p));
       return {opp: pick, why: 'neutral pick'};
     }
-
-    p2_picks = [];
-    let pool = candidates.slice();
-    const first = chooseOpponent(pool); p2_picks.push(first); pool = pool.filter(x=>x!==first.opp);
-
-    if(SEASON.doubleDuel && pool.length){
-      const second = chooseOpponent(pool); p2_picks.push(second); pool = pool.filter(x=>x!==second.opp);
-    }
-
+    p2_picks=[]; let pool=candidates.slice();
+    const first=chooseOpponent(pool); p2_picks.push(first); pool=pool.filter(x=>x!==first.opp);
+    if(SEASON.doubleDuel && pool.length){ const second=chooseOpponent(pool); p2_picks.push(second); }
     if(p2_picks.length===1){
-      p2_reasonText = `${p2_picks[0].why}.`;
-      addScene('Pick', `${p2_winner} chooses ${p2_picks[0].opp} — ${p2_reasonText}`);
+      p2_reasonText = first.why+'.';
+      addScene(`${p2_winner} chooses ${first.opp} — ${p2_reasonText}`);
     } else {
       p2_reasonText = `${p2_picks[0].why}; also ${p2_picks[1].why}.`;
-      addScene('Pick', `${p2_winner} chooses ${p2_picks[0].opp} and ${p2_picks[1].opp} — ${p2_reasonText} They will compete in a single 3‑way duel.`);
+      addScene(`${p2_winner} chooses ${p2_picks[0].opp} and ${p2_picks[1].opp} — ${p2_reasonText} (3‑way duel).`);
     }
-
-    p2_step=2; return;
+    p2_step=3; return;
   }
-
-  if(p2_step===2){
-    // Resolve duel: normal 1v1 OR 3‑way if doubleDuel
-    function duel1v1(a,b){
-      const p = duelWinProb(a,b);
-      const winner = Math.random()<p ? a : b;
-      const loser = winner===a? b : a;
-      return {winner, loser};
-    }
-    function duel3way(a,b,c){
-      // weight by challenge with a little noise
-      const w = {};
-      [a,b,c].forEach(x=> w[x] = (stats[x]?.challenge||8) * (0.85+Math.random()*0.3));
-      const total = w[a]+w[b]+w[c];
-      let r=Math.random()*total;
-      if((r-=w[a])<=0) return a;
-      if((r-=w[b])<=0) return b;
-      return c;
-    }
-
+  if(p2_step===3){
+    // Post‑pick relationship ripples
+    const hadAllyOption = p2_noKey.some(p=>p!==p2_winner && inAlliance(p2_winner,p));
+    postPickRelChanges(p2_winner, p2_picks.map(x=>x.opp), hadAllyOption);
+    p2_step=4; return;
+  }
+  if(p2_step===4){
+    // Duel resolution
     if(!SEASON.doubleDuel || p2_picks.length===1){
       const a=p2_winner, b=p2_picks[0].opp;
-      const r=duel1v1(a,b);
-      keys[r.winner].push('P2'); keysEarned[r.winner].P2=(keysEarned[r.winner].P2||0)+1;
-      wins[r.winner]=(wins[r.winner]||0)+1; losses[r.loser]=(losses[r.loser]||0)+1;
-      addScene('Duel', `${r.winner} defeats ${r.loser} and earns a Phase 2 key.`);
+      const p = duelWinProb(a,b); const win = Math.random()<p ? a : b; const lose=(win===a?b:a);
+      keys[win].push('P2'); keysEarned[win].P2=(keysEarned[win].P2||0)+1;
+      wins[win]=(wins[win]||0)+1; losses[lose]=(losses[lose]||0)+1;
+      addScene(`${win} defeats ${lose} and earns a Phase 2 key.`);
     } else {
       const a=p2_winner, b=p2_picks[0].opp, c=p2_picks[1].opp;
-      const win=duel3way(a,b,c);
+      const weight=x=>(stats[x]?.challenge||8)*(0.85+Math.random()*0.3);
+      const wa=weight(a), wb=weight(b), wc=weight(c), tot=wa+wb+wc;
+      let r=Math.random()*tot; const win=(r<wa)?a:((r-wa)<wb?b:c);
       keys[win].push('P2'); keysEarned[win].P2=(keysEarned[win].P2||0)+1;
-      // count one win, and one loss to each other participant
-      wins[win]=(wins[win]||0)+1;
-      [a,b,c].filter(x=>x!==win).forEach(l=> losses[l]=(losses[l]||0)+1);
-      addScene('Duel', `${a}, ${b}, and ${c} battle in a 3‑way duel — ${win} wins the Phase 2 key.`);
+      wins[win]=(wins[win]||0)+1; [a,b,c].filter(x=>x!==win).forEach(l=> losses[l]=(losses[l]||0)+1);
+      addScene(`${a}, ${b}, and ${c} battle in a 3‑way duel — ${win} wins the Phase 2 key.`);
     }
-
     updateProgress(); renderMasterVoteTable();
-    round++; p2_step=0; newEpisode('Episode '+episodes.length+' — Phase 2 R'+round);
+    round++; p2_step=0; newEpisode();
   }
 }
 
-/* ===== Phase 3 (unchanged rules + F4 ties) ===== */
+/* ===== Phase 3 (kept) ===== */
 function runPhase3(){
   if(p3_step===0){
-    addScene('Phase','Phase 3 — Final Cut: Vote step');
+    addScene('Phase 3 — Final Cut: Vote');
     const raw=simulateVote(players,players), pairs=[];
     raw.forEach(([v,to])=>{
       if(v===to){
@@ -652,45 +609,43 @@ function runPhase3(){
     });
     let [voteWinner] = tally(pairs,players);
 
-    // F4 tie logic
     if(players.length===4){
       const counts={}; players.forEach(p=>counts[p]=0); pairs.forEach(([_,t])=>counts[t]++);
       const vals=Object.values(counts); const max=Math.max(...vals);
       const tiedTop=Object.keys(counts).filter(p=>counts[p]===max);
       const allEq=vals.every(v=>v===vals[0]);
       if(allEq){
-        addScene('Tie','Final 4 four‑way tie! All four compete; top three advance.');
+        addScene('Final 4 four‑way tie! All four compete; top three advance.');
         const perf=players.map(p=>({p,score:(stats[p]?.challenge||8)*(0.8+Math.random()*0.4)})).sort((a,b)=>b.score-a.score);
         const advancing=[perf[0].p,perf[1].p,perf[2].p], fourth=perf[3].p;
         finalists=advancing.slice(); eliminated.push(fourth); jury.push({name:fourth,phase:3});
-        addScene('Result','Top‑3: '+advancing.join(', ')+'. Eliminated: '+fourth+'.');
-        phase=4; newEpisode('Episode '+(episodes.length+1)+' — Finale'); return;
+        addScene('Top‑3: '+advancing.join(', ')+'. Eliminated: '+fourth+'.');
+        phase=4; newEpisode(); addScene('Finale begins.'); return;
       }
       if(tiedTop.length===2){
         const non=players.filter(p=>!tiedTop.includes(p));
-        finalists=non.slice(); addScene('Tie','Final 4 two‑way tie: '+tiedTop[0]+' vs '+tiedTop[1]+'. Others advance: '+non.join(', ')+'.');
+        finalists=non.slice(); addScene('F4 two‑way tie: '+tiedTop[0]+' vs '+tiedTop[1]+'. Others advance: '+non.join(', ')+'.');
         const a=tiedTop[0], b=tiedTop[1], p=duelWinProb(a,b), dW=Math.random()<p?a:b, dL=(dW===a?b:a);
         finalists.push(dW); eliminated.push(dL); jury.push({name:dL,phase:3});
-        addScene('Duel', dW+' wins tiebreak duel. '+dL+' joins the jury.');
-        phase=4; newEpisode('Episode '+(episodes.length+1)+' — Finale'); return;
+        addScene(dW+' wins tiebreak duel. '+dL+' joins the jury.');
+        phase=4; newEpisode(); addScene('Finale begins.'); return;
       }
     }
 
-    p3_voteWinner=voteWinner; addScene('Result', voteWinner+' wins the vote and becomes a finalist.');
-    const avail=players.filter(p=>p!==voteWinner);
-    const ally=avail.filter(p=>inAlliance(p,voteWinner));
+    p3_voteWinner=voteWinner; addScene(voteWinner+' wins the vote and becomes a finalist.');
+    const avail=players.filter(p=>p!==voteWinner), ally=avail.filter(p=>inAlliance(p,voteWinner));
     p3_chosenAlly = weighted(ally.length?ally:avail, p=> (stats[p]?.social||8)*relFactor(voteWinner,p));
     addVoteColumn('P3 Vote','P3',1,knownVoters,pairs,voteWinner,null);
     p3_duelists=players.filter(p=>p!==voteWinner && p!==p3_chosenAlly);
-    addScene('Pick', voteWinner+' selects '+p3_chosenAlly+'. The remaining two will duel for the last spot.');
+    addScene(voteWinner+' selects '+p3_chosenAlly+'. The remaining two will duel for the last spot.');
     finalists=[p3_voteWinner,p3_chosenAlly]; p3_step=1; return;
   }
   if(p3_step===1){
     const [a,b]=p3_duelists, p=duelWinProb(a,b); const dW=Math.random()<p?a:b, dL=(dW===a?b:a);
     finalists.push(dW); eliminated.push(dL); jury.push({name:dL,phase:3});
     wins[dW]=(wins[dW]||0)+1; losses[dL]=(losses[dL]||0)+1;
-    addScene('Duel', dW+' wins the final duel. '+dL+' joins the jury.');
-    phase=4; p3_step=0; newEpisode('Episode '+(episodes.length+1)+' — Finale');
+    addScene(dW+' wins the final duel. '+dL+' joins the jury.');
+    phase=4; p3_step=0; newEpisode(); addScene('Finale begins.');
   }
 }
 
@@ -698,7 +653,7 @@ function runPhase3(){
 var finaleState=null, finaleStep=0;
 function runFinale(){
   if(!finaleState){
-    addScene('Finale','Finalists: '+finalists.join(', '));
+    addScene('Finalists: '+finalists.join(', '));
     finaleState={ finalistKeys:{}, chosenVaults:{}, juryMatrix:{} };
     finalists.forEach(f=>finaleState.finalistKeys[f]=3);
     const support={}, maxS=finalists.reduce((m,f)=>{ let s=0; jury.forEach(j=>{ const cap=(j.phase===1?1:(j.phase===2?2:4)); if(inAlliance(j.name,f)) s+=cap; }); s+=0.4*(stats[f]?.social||8); support[f]=s; return Math.max(m,s); },1);
@@ -707,23 +662,22 @@ function runFinale(){
     finaleState.juryMatrix=distributeJuryKeys(finalists,jury,finaleState.finalistKeys);
     Object.keys(finaleState.finalistKeys).forEach(f=> juryKeysReceived[f]=(finaleState.finalistKeys[f]-3));
     displayJuryMatrix(finaleState.juryMatrix);
-    addScene('Jury','Jury awards keys. Click Next Scene to reveal vault openings.');
+    addScene('Jury awards keys. Next: vaults.');
     return;
   }
   if(finaleStep===0){
     const s=[]; finalists.forEach(f=> s.push(f+' → vault '+finaleState.chosenVaults[f]));
-    addScene('Vaults','Selections: '+s.join(' | '));
-    finalists.forEach(f=> addScene('Keys', f+' has '+finaleState.finalistKeys[f]+' keys.') );
+    addScene('Vault choices: '+s.join(' | '));
+    finalists.forEach(f=> addScene(f+' has '+finaleState.finalistKeys[f]+' keys.') );
     const result=finalists.map(n=>({name:n,keys:finaleState.finalistKeys[n],vault:finaleState.chosenVaults[n]})).sort((a,b)=>b.vault-a.vault);
-    finaleState.winner = result.find(r=>r.keys>=r.vault) || null;
-    addScene('Next','Ready to reveal winner…'); finaleStep=1; return;
+    finaleState.winner = result.find(r=>r.keys>=r.vault) || null; finaleStep=1; return;
   }
   if(finaleStep===1){
     if(!finaleState.winner){
       const fourth=jury.find(j=>j.phase===3)?.name || 'Fourth Place';
-      addScene('Winner','No vault opens. '+fourth+' wins by default.');
+      addScene('No vault opens. '+fourth+' wins by default.');
     } else {
-      addScene('Winner', finaleState.winner.name+' opens the '+finaleState.winner.vault+'‑key vault with '+finaleState.winner.keys+' keys and wins!');
+      addScene(finaleState.winner.name+' opens the '+finaleState.winner.vault+'‑key vault with '+finaleState.winner.keys+' keys and wins!');
     }
     nextBtn.textContent='Simulate Again'; nextBtn.onclick=()=>location.reload();
   }
@@ -751,21 +705,6 @@ function distributeJuryKeys(finalists,jury,finalistKeys){
 
 /* ===== Init preseason UIs ===== */
 buildCastGrid(); buildStatsTable(); buildRelFocusList(); renderEpisodeNav();
-
-/* ===== Jury matrix display ===== */
-function displayJuryMatrix(matrix){
-  const area=document.getElementById('juryMatrix'); if(!finalists.length){ area.innerHTML=''; return; }
-  let html='<div style="overflow:auto"><table><tr><th>Juror</th>';
-  finalists.forEach(f=> html+=`<th>${f}</th>`); html+='<th>Total</th></tr>';
-  let total=0;
-  for(const juror in matrix){
-    let sum=0; html+=`<tr><td>${juror}</td>`;
-    finalists.forEach(f=>{ const v=matrix[juror][f]||0; sum+=v; total+=v; html+=`<td>${v}</td>`; });
-    html+=`<td>${sum}</td></tr>`;
-  }
-  html+='</table></div><div class="hint">Total jury keys: '+total+' (should be 16)</div>';
-  area.innerHTML=html;
-}
 </script>
 </body>
 </html>
