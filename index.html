@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>The Vault Simulator — Alt Rules (v5)</title>
+<title>The Vault Simulator — Alt Rules (v5.1)</title>
 <meta http-equiv="Content-Security-Policy" content="img-src 'self' https: data:;">
 <style>
   :root { --bg:#f6f7fb; --card:#fff; --line:#e5e7eb; --muted:#6b7280; --text:#0f172a; --btn:#111827; --btntext:#fff; --shade:#fafafa; }
@@ -185,7 +185,7 @@ function logEventWithImages(text,urls=[]){
 
 <script>
 /* =========================
-   ALT VAULT — ENGINE v5
+   ALT VAULT — ENGINE v5.1
    ========================= */
 const UI = {
   playersInput: document.getElementById('playersInput'),
@@ -243,10 +243,17 @@ function buildPreseason(){
   }
   S.roster.forEach(a=> S.roster.forEach(b=>{ if(a.name!==b.name && typeof a.rel[b.name]!=='number') a.rel[b.name]=50; }));
 
+  // ===== MODAL (fixed: click-inside doesn't close) =====
   const modal=document.createElement('div'); modal.className='modal';
   const panel=document.createElement('section'); panel.className='card panel';
   panel.innerHTML='<h2>Pre‑Season Editor</h2>';
   const content=document.createElement('div'); content.className='content';
+  // Close only when clicking the semi-transparent backdrop
+  modal.addEventListener('click', (e)=>{ if(e.target===modal) document.body.removeChild(modal); });
+  // Prevent clicks inside the panel from bubbling to modal
+  panel.addEventListener('click', (e)=> e.stopPropagation());
+  panel.appendChild(content); modal.appendChild(panel); document.body.appendChild(modal);
+  // ===== END MODAL =====
 
   const tabs=document.createElement('div'); tabs.className='tabs';
   const tAttr=document.createElement('button'); tAttr.textContent='Attributes'; tAttr.className='secondary';
@@ -300,7 +307,6 @@ function buildPreseason(){
   buttons.appendChild(save); buttons.appendChild(cancel);
 
   content.appendChild(tabs); content.appendChild(wrapAttr); content.appendChild(wrapRel); content.appendChild(buttons);
-  panel.appendChild(content); modal.appendChild(modalBackDrop(modal,panel)); modal.appendChild(panel); document.body.appendChild(modal);
 
   function show(tab){ wrapAttr.style.display=(tab==='attr')?'block':'none'; wrapRel.style.display=(tab==='rel')?'block':'none';
     tAttr.classList.toggle('secondary', tab!=='attr'); tRel.classList.toggle('secondary', tab!=='rel'); }
@@ -326,7 +332,6 @@ function buildPreseason(){
 
   function th(t){ const el=document.createElement('th'); el.innerHTML=t; return el; }
   function td(t){ const el=document.createElement('td'); el.innerHTML=t; return el; }
-  function modalBackDrop(m,p){ const d=document.createElement('div'); d.className='modal'; d.style.background='transparent'; d.addEventListener('click',()=>{document.body.removeChild(m)}); return d; }
 }
 
 /* ---------- Alliances ---------- */
@@ -563,7 +568,9 @@ function phase1Round(){
     if(noKey.length){
       const map=voteAmong(noKey, noKey, true, 'neutral');
       addVoteColumn('P1R5 (LCV)', map, noKey);
-      const winner=byName(choice(Object.keys(map)));
+      const tallyObj={}; Object.values(map).forEach(n=>tallyObj[n]=(tallyObj[n]||0)+1);
+      const top=Math.max(...Object.values(tallyObj)); const tied=Object.keys(tallyObj).filter(n=>tallyObj[n]===top);
+      const winner=byName(choice(tied)); // choose among tied top
       winner.p1[4]='V';
       logEventWithImages(`${winner.name} receives the Last Chance vote key.`, [winner.img||'']);
       const elim = alive().filter(p=>!p.p1.includes('V') && !p.p1.includes('C'));
@@ -619,7 +626,8 @@ function phase2Round(){
         const map2=voteAmong(voters, tied.map(byName), true, 'neutral');
         addVoteColumn(`P2R${S.round} (revote)`, map2, voters);
         const t2={}; Object.values(map2).forEach(n=>t2[n]=(t2[n]||0)+1);
-        voteWinner=byName(choice(Object.keys(t2).filter(n=>t2[n]===Math.max(...Object.values(t2)))));
+        const m2=Math.max(...Object.values(t2)); const tied2=Object.keys(t2).filter(n=>t2[n]===m2);
+        voteWinner=byName(choice(tied2));
       } else if (tied.length===3){
         logEventWithImages(`Three-way tie among ${tied.join(', ')}. Triple duel!`, tied.map(n=>byName(n).img||''));
         duelWinner=weightPick(tied.map(byName), p=>Math.max(1,p.attr.comp));
@@ -757,26 +765,24 @@ function runFinale(){
 
   // --- Perception model for finalists (they guess their totals) ---
   function estimateJuryKeysFor(f){
-    // Expected keys = sum_j budget_j * p(j gives to f), where p depends on rel(j,f), f.social/strategy
     let exp=0, relAvg=0, count=0;
     budgets.forEach((b,jName)=>{
       const juror=byName(jName);
       const rel = juror ? (juror.rel?.[f.name]??50) : 50; relAvg+=rel*b; count+=b;
-      // probability weight (squashed)
       const score = 0.8*(rel-50)/50 + 0.1*(f.attr.soc-5)/5 + 0.1*(f.attr.strat-5)/5; // ~[-0.8..+0.8]
-      const p = clamp(0.5 + 0.4*score, 0.05, 0.95); // keep bounded
+      const p = clamp(0.5 + 0.4*score, 0.05, 0.95);
       exp += b * p;
     });
     const avgRel = count? (relAvg/count) : 50;
 
-    // Risk profile: strategy can go bold, but if jury sentiment is low, even high‑strategy plays safer
+    // Risk profile: high‑strat can be bold, but if sentiment is low, they still play safe
     let risk = 0; // 0 normal, -1 safe, +1 bold
-    if(avgRel < 45) risk -= 1;                // jury seems cold → safer
+    if(avgRel < 45) risk -= 1;                // cold jury → safer
     if(f.attr.strat >= 8 && avgRel >= 55) risk += 1; // smart + decent sentiment → bolder
 
-    // Noise: ±[0..2] with bias by strategy (high strat = slightly tighter error band)
+    // Noise band: high strategy = slightly tighter estimate
     const noiseRange = (f.attr.strat>=8)? 1.5 : 2.5;
-    const noise = (Math.random()*2*noiseRange - noiseRange); // e.g., -2..+2
+    const noise = (Math.random()*2*noiseRange - noiseRange);
 
     return { estimate: exp + noise, avgRel, risk };
   }
@@ -786,13 +792,11 @@ function runFinale(){
   const taken=new Set(); const pickMap=new Map(); const reveal=[];
   F.forEach(f=>{
     const {estimate, avgRel, risk} = estimateJuryKeysFor(f);
-    const estKeys = Math.max(0, estimate); // jury estimate >= 0
-    let target = 3 + estKeys;              // base 3 + estimated jury
-    // Apply risk: safe reduces a notch, bold allows nudging up slightly
+    const estKeys = Math.max(0, estimate);
+    let target = 3 + estKeys;
     if(risk<0) target -= 1;
     if(risk>0) target += 0.5;
 
-    // choose highest vault <= target; if none, pick smallest free
     let choiceV = 3;
     for(const v of vaults){ if(!taken.has(v) && v<=target+1e-6) choiceV=v; }
     if(taken.has(choiceV)) choiceV = vaults.find(v=>!taken.has(v))||3;
@@ -801,12 +805,10 @@ function runFinale(){
     reveal.push({name:f.name, est:(3+estKeys).toFixed(1), risk:(risk<0?'safe':risk>0?'bold':'normal'), avgRel:avgRel.toFixed(0), need:choiceV});
   });
 
-  // Reveal estimated logic line (for flavor)
   reveal.forEach(r=>{
     logEventWithImages(`${r.name} estimates ~${r.est} keys (${r.risk}, jury sentiment ~${r.avgRel}). Chooses ${r.need}-key vault.`, [byName(r.name).img||'']);
   });
 
-  // Actual open check using real totals
   const results=[];
   F.forEach(f=>{
     const totalKeys=3+finalistTotals.get(f.name);
