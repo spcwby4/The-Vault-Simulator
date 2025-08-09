@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>The Vault Simulator — Episodes + Events (Patched)</title>
+<title>The Vault Simulator — Episodes + Events (Jury Fix)</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1c2130; --muted:#2a2f3a; --text:#e5e7eb; --sub:#aeb4c0;
@@ -595,7 +595,7 @@ function runPhase1(){
     // Draw: Round 4 includes ALL eligible
     const eligible=players.filter(p=>!keys[p].includes('P1'));
     p1_drawn = (round===4) ? eligible.slice() : shuffle(eligible).slice(0, Math.min(4, eligible.length));
-    addScene('Drawn: '+(p1_drawn.length? p1_drawn.join(', ') : 'none'));
+    addScene('Drawn: '+(p1_drawn.length? p1_drawn.join(', '):'none'));
 
     triggerSocialEvents('around the draw');
 
@@ -692,14 +692,12 @@ function runPhase2(){
     p2_step=1; return;
   }
   if(p2_step===1){
-    // post‑vote ripples for both normal and tie paths
     const basis = p2_isTie ? p2_tied : p2_noKey;
     postVoteRelChanges(p2_isTie? '(tie)':p2_winner, basis, p2_votePairs);
-    p2_step = p2_isTie ? 4 : 2; // tie skips picking; go straight to duel
+    p2_step = p2_isTie ? 4 : 2;
     return;
   }
   if(p2_step===2){
-    // Picks (only if not a tie)
     const candidates=p2_noKey.filter(p=>p!==p2_winner);
     function chooseOpponent(fromPool){
       const allies=fromPool.filter(p=>inAlliance(p,p2_winner));
@@ -730,13 +728,11 @@ function runPhase2(){
     p2_step=3; return;
   }
   if(p2_step===3){
-    // Post‑pick ripples (only non‑tie path)
     const hadAllyOption = p2_noKey.some(p=>p!==p2_winner && inAlliance(p2_winner,p));
     postPickRelChanges(p2_winner, p2_picks.map(x=>x.opp), hadAllyOption);
     p2_step=4; return;
   }
   if(p2_step===4){
-    // Duel resolution
     if(p2_isTie){
       if(p2_tied.length===2){
         const [a,b]=p2_tied; const p=duelWinProb(a,b);
@@ -791,7 +787,7 @@ function runPhase3(){
     });
     let [voteWinner] = tally(pairs,players);
 
-    // F4 special ties handled below if present
+    // F4 special ties
     if(players.length===4){
       const counts={}; players.forEach(p=>counts[p]=0); pairs.forEach(([_,t])=>counts[t]++);
       const vals=Object.values(counts); const max=Math.max(...vals);
@@ -818,7 +814,7 @@ function runPhase3(){
     p3_voteWinner=voteWinner; addScene(voteWinner+' wins the vote and becomes a finalist.');
     const avail=players.filter(p=>p!==voteWinner), ally=avail.filter(p=>inAlliance(p,voteWinner));
     p3_chosenAlly = weighted(ally.length?ally:avail, p=> (stats[p]?.social||8)*relFactor(voteWinner,p));
-    addVoteColumn('P3 R1','P3',1,players,pairs,voteWinner,null); // ensure Phase 3 shows in matrix
+    addVoteColumn('P3 R1','P3',1,players,pairs,voteWinner,null);
     p3_duelists=players.filter(p=>p!==voteWinner && p!==p3_chosenAlly);
     addScene(voteWinner+' selects '+p3_chosenAlly+'. The remaining two will duel for the last spot.');
     finalists=[p3_voteWinner,p3_chosenAlly]; p3_step=1; return;
@@ -891,15 +887,61 @@ function pickVaults(expect){
   });
   return picked;
 }
-function distributeJuryKeys(finalists,jury,finalistKeys){
-  const pool=[]; jury.forEach(j=>{ const cap=(j.phase===1?1:(j.phase===2?2:4)); for(let k=0;k<cap;k++) pool.push(j.name); });
-  shuffle(pool).slice(0,16).forEach(jName=>{
-    const base={}; finalists.forEach(f=> base[f]= (inAlliance(jName,f)?1.3:1.0) * (1 + 0.06*(stats[f]?.social||8)) );
-    const pick=weighted(finalists, f=>base[f]); finalistKeys[pick]+=1;
+
+/* ===== NEW: Jury distribution that meets exact per‑juror caps ===== */
+function distributeJuryKeys(finalists, jury, finalistKeys){
+  const softmax = (obj, temp=1)=> {
+    const vals = finalists.map(f=>obj[f]/temp);
+    const m = Math.max(...vals);
+    const exps = vals.map(v=>Math.exp(v - m));
+    const Z = exps.reduce((a,b)=>a+b,0);
+    const probs = {}; finalists.forEach((f,i)=> probs[f] = exps[i]/Z);
+    return probs;
+  };
+
+  const jm = {};
+  jury.forEach(j => {
+    jm[j.name] = {};
+    finalists.forEach(f => jm[j.name][f] = 0);
   });
-  const jm={}; jury.forEach(j=>{ jm[j.name]={}; finalists.forEach(f=> jm[j.name][f]=0); });
-  const counts={}; finalists.forEach(f=>counts[f]=finalistKeys[f]-3);
-  const names=Object.keys(jm); let idx=0; finalists.forEach(f=>{ for(let k=0;k<counts[f];k++){ const j=names[idx%names.length]; jm[j][f] += 1; idx++; } });
+
+  jury.forEach(j => {
+    const cap = (j.phase === 1 ? 1 : (j.phase === 2 ? 2 : 4));
+
+    // base preference: alliance bonus + finalist social + tiny jitter
+    const base = {};
+    finalists.forEach(f => {
+      const allianceBoost = inAlliance(j.name, f) ? 1.4 : 1.0;
+      const socialBoost   = 0.12 * (stats[f]?.social || 8);
+      const jitter        = 0.9 + Math.random()*0.2;
+      base[f] = allianceBoost * (1 + socialBoost) * jitter;
+    });
+
+    const probs = softmax(base, 1);
+    const ranked = finalists.slice().sort((a,b)=>probs[b]-probs[a]);
+    const top = ranked[0], second = ranked[1];
+
+    let pAll = (j.phase === 3 ? 0.75 : j.phase === 2 ? 0.65 : 0.55);
+    const bothAllied = inAlliance(j.name, top) && inAlliance(j.name, second);
+    const neitherAllied = !inAlliance(j.name, top) && !inAlliance(j.name, second);
+    if (bothAllied || neitherAllied) pAll -= 0.2;
+    if (probs[second] > 0 && (probs[top] / probs[second]) < 1.1) pAll -= 0.15;
+    pAll = clamp(pAll, 0.2, 0.9);
+
+    if (Math.random() < pAll) {
+      jm[j.name][top] += cap;
+      finalistKeys[top] += cap;
+    } else {
+      for (let k=0; k<cap; k++){
+        const pNow = softmax(base, 1.05);
+        const pick = weighted(finalists, f => pNow[f]);
+        jm[j.name][pick] += 1;
+        finalistKeys[pick] += 1;
+        base[pick] *= 0.95; // slight diminishing returns within this juror
+      }
+    }
+  });
+
   return jm;
 }
 
